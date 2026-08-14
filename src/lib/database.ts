@@ -1,7 +1,7 @@
 import type { User } from "firebase/auth";
 import { get, push, ref, remove, set, update } from "firebase/database";
 import { database } from "./firebase";
-import type { Deck, UserProfile } from "../types";
+import type { Deck, DocumentRecord, UserProfile } from "../types";
 
 export type UserDataCollection =
   | "decks"
@@ -153,4 +153,55 @@ export async function updateDeckData(
 /** Exclui o deck. Cards ainda não existem de forma persistida nesta fase. */
 export async function deleteDeck(uid: string, deckId: string): Promise<void> {
   await remove(ref(database, `decks/${uid}/${deckId}`));
+}
+
+
+/** Registra somente os metadados do PDF/DOCX. O arquivo em si nunca vai para o Firebase. */
+export async function createDocumentRecord(
+  uid: string,
+  deckId: string,
+  file: File,
+): Promise<DocumentRecord> {
+  const collectionRef = userCollectionRef("documents", uid);
+  const newDocumentRef = push(collectionRef);
+  const id = newDocumentRef.key;
+
+  if (!id) throw new Error("Não foi possível criar o identificador do documento.");
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension !== "pdf" && extension !== "docx") {
+    throw new Error("Formato de documento não suportado.");
+  }
+
+  const now = isoNow();
+  const record: DocumentRecord = {
+    id,
+    deckId,
+    name: file.name,
+    extension,
+    mimeType: file.type || (extension === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    sizeBytes: file.size,
+    extractionStatus: "pending",
+    storageMode: "browser_only",
+    extractedTextStored: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await set(newDocumentRef, record);
+  return record;
+}
+
+/** Liga o documento ao deck sem guardar bytes ou URL de arquivo. */
+export async function linkDocumentToDeck(
+  uid: string,
+  deckId: string,
+  document: DocumentRecord,
+): Promise<void> {
+  await update(ref(database, `decks/${uid}/${deckId}`), {
+    creationMode: "upload",
+    sourceDocumentId: document.id,
+    sourceDocumentName: document.name,
+    updatedAt: isoNow(),
+  });
 }

@@ -103,7 +103,7 @@ export default function DeckDetail() {
           Estudar agora
         </Link>
         <Link
-          to="/create/upload"
+          to={`/create/upload?deckId=${deck.id}`}
           className="rounded-lg border border-ink-200 dark:border-ink-700 px-4 py-2.5 text-sm font-medium text-ink-700 dark:text-paper hover:bg-ink-50 dark:hover:bg-ink-800 transition-colors"
         >
           Gerar cards com IA
@@ -135,7 +135,7 @@ export default function DeckDetail() {
           <div className="source-tab">DECK VAZIO</div>
           <h2 className="font-display text-xl text-ink-900 dark:text-paper mt-1">Pronto para receber conteúdo</h2>
           <p className="text-sm text-ink-400 mt-2 max-w-xl">
-            Na próxima fase, você poderá enviar PDF ou DOCX para preencher este deck. O modo de pesquisa por tema com fontes verificáveis também já está previsto na arquitetura.
+            Este deck já pode receber um PDF ou DOCX. O arquivo permanece no navegador e o Firebase guarda apenas os metadados necessários para rastrear a origem. A extração do conteúdo entra na próxima fase.
           </p>
         </div>
       )}

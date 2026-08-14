@@ -77,13 +77,16 @@ export interface Deck {
   newCards: number;
   learnedCards: number;
   sourceDocumentName?: string;
+  sourceDocumentId?: string;
   createdAt?: string;
   updatedAt: string;
 }
 
 export interface DocumentRecord {
   id: string;
+  deckId: string;
   name: string;
+  extension: "pdf" | "docx";
   mimeType: string;
   sizeBytes?: number;
   extractionStatus: "pending" | "processing" | "ready" | "error";

@@ -1,35 +1,51 @@
-# Fichário — Flashcards médicos com IA (Fase 4)
+# Fichário — Flashcards médicos com IA (Fase 5)
 
 Plataforma de estudo médico com flashcards rastreáveis. O produto foi preparado
 para duas formas de criação: **Meu material** (PDF/DOCX do usuário) e, em fase
-posterior, **Pesquisar tema com fontes** (diretrizes/artigos/fontes verificáveis).
+posterior, **Pesquisar por tema** (diretrizes/artigos/fontes verificáveis).
 A IA nunca deve ser tratada como fonte: ela só transforma contexto-fonte em cards.
 
 Você não precisa rodar nada localmente. Os arquivos são enviados pelo GitHub no
 navegador e a Netlify faz o build e publica sozinha.
 
-## Onde estamos: Fase 4 de 15 — decks reais
+## Onde estamos: Fase 5 de 15 — seleção real de PDF/DOCX sem Storage
 
 Concluído nesta versão:
 
-- Fase 3 confirmada: perfil privado real em `users/{uid}`;
-- Biblioteca deixou de usar decks fictícios;
-- Dashboard deixou de usar decks e números fictícios;
-- criação de deck real em `decks/{uid}/{deckId}`;
-- edição de nome, especialidade e tema;
-- exclusão de deck;
-- busca de decks por nome, especialidade ou tema;
-- atualização automática da Biblioteca e Dashboard quando os dados mudam;
-- tela de detalhe do deck agora carrega o deck real pelo ID;
-- totais de cards/revisões vêm dos próprios decks e começam em zero;
-- métricas ainda não implementadas (estudados hoje/sequência) aparecem como zero,
-  nunca como dados demonstrativos;
-- arquitetura continua preparada para decks criados manualmente, por upload ou
-  por pesquisa com fontes verificáveis.
+- Fase 4 confirmada: criação, edição, exclusão e persistência de decks reais;
+- tela **Criar com IA** agora recebe um arquivo de verdade por clique ou arrastar/soltar;
+- aceita apenas `.pdf` e `.docx`;
+- valida arquivo vazio e limite de 25 MB;
+- mostra nome, formato e tamanho do documento selecionado;
+- permite trocar ou remover o arquivo antes de continuar;
+- permite escolher o deck de destino;
+- ao abrir a criação a partir de um deck, ele já chega pré-selecionado;
+- o PDF/DOCX **não é enviado para Firebase Storage**;
+- o Realtime Database guarda somente metadados em `documents/{uid}/{documentId}`;
+- o documento fica ligado ao deck por `sourceDocumentId` e `sourceDocumentName`;
+- `creationMode` do deck passa para `upload`;
+- a tela de configuração agora mostra o nome real do arquivo e o deck real;
+- o botão de geração está propositalmente desabilitado até a Fase 6, para não
+  apresentar cards fictícios como se tivessem sido extraídos do documento;
+- a interface já apresenta os dois caminhos de produto: **Meu material** e
+  **Pesquisar por tema** (este segundo ainda planejado).
 
-Os flashcards exibidos nas telas de estudo/revisão da geração ainda são de
-pré-visualização. Eles serão substituídos quando as fases de upload, extração e IA
-forem implementadas.
+## O que significa “sem Storage”
+
+O arquivo selecionado permanece na memória do navegador enquanto a pessoa está
+no fluxo de criação. Nesta fase, o Firebase recebe somente:
+
+- nome do arquivo;
+- formato;
+- MIME type;
+- tamanho;
+- deck de destino;
+- estado da extração;
+- datas de criação/atualização.
+
+Nenhum byte do PDF/DOCX, URL de arquivo ou texto extraído é salvo no Realtime
+Database. Se a página for atualizada no meio do fluxo, por privacidade o navegador
+pode perder o acesso ao arquivo e a tela pede para selecioná-lo novamente.
 
 ## Estrutura no Realtime Database
 
@@ -42,8 +58,22 @@ studySessions/{uid}/{sessionId}
 documents/{uid}/{documentId}
 ```
 
-Nesta fase, ao criar o primeiro deck, a raiz `decks` passa a aparecer de verdade
-no console do Firebase.
+Exemplo do documento criado nesta fase:
+
+```text
+documents/{uid}/{documentId}
+  id: "..."
+  deckId: "..."
+  name: "Insuficiencia Cardiaca.pdf"
+  extension: "pdf"
+  mimeType: "application/pdf"
+  sizeBytes: 1234567
+  extractionStatus: "pending"
+  storageMode: "browser_only"
+  extractedTextStored: false
+  createdAt: "..."
+  updatedAt: "..."
+```
 
 ## FAÇA AGORA — publicar esta versão
 
@@ -58,44 +88,39 @@ no console do Firebase.
 
 Não rode `npm install`, `npm run dev`, Git ou terminal no seu computador.
 
-## FAÇA AGORA — testar a Fase 4
+## FAÇA AGORA — testar a Fase 5
 
-### Teste 1 — os mocks devem sumir
+### Teste 1 — abrir a partir do deck
 
 1. Faça login.
-2. Abra o Dashboard.
-3. Os decks fictícios Cardiologia, Neurologia, Pneumologia e Infectologia não
-   devem mais aparecer.
-4. Como ainda não existe deck real, deve aparecer o estado vazio.
-5. Os números do topo devem estar zerados em vez de mostrar estatísticas fictícias.
+2. Abra **Biblioteca** e entre no deck criado na Fase 4.
+3. Clique em **Gerar cards com IA**.
+4. Na tela seguinte, o deck de destino deve aparecer já selecionado.
 
-### Teste 2 — criar um deck real
+### Teste 2 — selecionar um arquivo real
 
-1. Abra **Biblioteca**.
-2. Clique em **+ Novo deck**.
-3. Para testar, preencha por exemplo:
-   - Nome: `Insuficiência Cardíaca`;
-   - Especialidade: `Cardiologia`;
-   - Tema: `ICFEr`.
-4. Clique em **Criar deck**.
-5. O deck deve aparecer imediatamente na Biblioteca.
-6. Volte ao Dashboard: ele também deve aparecer em **Seus decks**.
+1. Arraste um PDF/DOCX para a área pontilhada ou clique nela.
+2. O Fichário deve mostrar o nome, tamanho e formato do arquivo.
+3. Teste **Trocar** e **Remover** se quiser.
+4. Selecione o arquivo novamente e clique em **Continuar**.
 
-### Teste 3 — conferir no Firebase
+### Teste 3 — configuração
+
+1. A tela deve mostrar o nome real do arquivo selecionado.
+2. Deve mostrar também o deck real de destino.
+3. As opções de quantidade, tipos e prioridades continuam clicáveis.
+4. O botão **Gerar flashcards** fica desabilitado nesta versão porque a extração
+   real do texto só entra na Fase 6.
+
+### Teste 4 — conferir o Firebase
 
 1. Abra Firebase > Realtime Database > **Dados**.
-2. Agora deve aparecer `decks`.
-3. Abra `decks > SEU_UID > ID_DO_DECK`.
-4. Deve existir `title`, `specialty`, `topic`, `creationMode`, os contadores em
-   zero e as datas `createdAt`/`updatedAt`.
-
-### Teste 4 — editar e excluir
-
-1. Clique no deck.
-2. Use **Editar deck**, altere alguma informação e salve.
-3. Confirme que a Biblioteca foi atualizada.
-4. Se quiser testar exclusão, clique em **Excluir** e confirme.
-5. O deck deve desaparecer também do Realtime Database.
+2. Deve existir a raiz `documents`.
+3. Abra `documents > SEU_UID > ID_DO_DOCUMENTO`.
+4. Confirme os metadados descritos acima.
+5. Abra também `decks > SEU_UID > SEU_DECK`.
+6. O deck deve ter `creationMode: "upload"`, `sourceDocumentId` e
+   `sourceDocumentName`.
 
 ## Regras de segurança
 
@@ -105,15 +130,13 @@ só pode ler/escrever dentro do próprio UID em `users`, `decks`, `cards`,
 
 ## Storage continua pausado
 
-O projeto não depende de Firebase Storage. Na Fase 5, o upload será implementado
-sem exigir Blaze/cartão: o arquivo será trabalhado no navegador e só os dados
-necessários serão persistidos.
+O projeto segue no Firebase Spark e não depende de Firebase Storage/Blaze.
 
 ## Próxima fase
 
-**Fase 5 — upload de documento sem Firebase Storage pago.** A tela de criação
-passará a receber o arquivo de verdade e vinculá-lo a um deck, ainda sem depender
-de cartão ou instalação local.
+**Fase 6 — extração local de PDF/DOCX.** O navegador passará a ler o conteúdo do
+documento, identificar páginas/seções quando possível e avisar quando um PDF for
+digitalizado/imagem sem texto extraível.
 
 ## Stack
 

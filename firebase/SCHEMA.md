@@ -1,73 +1,85 @@
-# Estrutura do Realtime Database — Fichário
+# Realtime Database — estrutura do Fichário
+
+Cada coleção privada fica separada por `uid`. As regras em `database.rules.json` garantem que uma conta autenticada só leia/escreva seus próprios dados.
 
 ```text
 users/{uid}
+  uid
+  name
+  email
+  course
+  createdAt
+  updatedAt
+  lastLoginAt
+
 decks/{uid}/{deckId}
-cards/{uid}/{cardId}
-reviews/{uid}/{reviewId}
-studySessions/{uid}/{sessionId}
+  id
+  title
+  specialty
+  topic?
+  creationMode: manual | upload | research
+  totalCards
+  dueToday
+  newCards
+  learnedCards
+  sourceDocumentId?
+  sourceDocumentName?
+  createdAt
+  updatedAt
+
 documents/{uid}/{documentId}
+  id
+  deckId
+  name
+  extension: pdf | docx
+  mimeType
+  sizeBytes
+  extractionStatus: pending | processing | ready | error
+  storageMode: browser_only
+  extractedTextStored: false
+  createdAt
+  updatedAt
+
+cards/{uid}/{cardId}
+  id
+  deckId
+  type
+  question
+  answer
+  explanation?
+  topic
+  tags[]
+  difficulty
+  sources[]
+  hasSourceConflict?
+  sourceConflictNote?
+  createdAt
+  updatedAt?
+
+reviews/{uid}/{reviewId}
+  id
+  cardId
+  deckId
+  rating
+  reviewedAt
+  nextReviewAt?
+
+studySessions/{uid}/{sessionId}
+  id
+  deckId?
+  startedAt
+  endedAt?
+  reviewedCards
 ```
 
-## users/{uid}
+## Regra central de origem
 
-```json
-{
-  "uid": "firebase-auth-uid",
-  "name": "Nome da pessoa",
-  "email": "email@exemplo.com",
-  "course": "Medicina",
-  "createdAt": "ISO-8601",
-  "updatedAt": "ISO-8601",
-  "lastLoginAt": "ISO-8601"
-}
-```
+A IA nunca é tratada como fonte. Todo card deverá apontar para uma ou mais fontes rastreáveis.
 
-## decks/{uid}/{deckId}
+- `creationMode = upload`: a fonte é um PDF/DOCX enviado pelo usuário.
+- `creationMode = research`: a fonte virá de pesquisa médica verificável (fase futura).
+- `creationMode = manual`: deck criado manualmente antes de receber conteúdo.
 
-A partir da Fase 4, decks são dados reais.
+## Arquivos na Fase 5
 
-```json
-{
-  "id": "firebase-generated-id",
-  "title": "Insuficiência Cardíaca",
-  "specialty": "Cardiologia",
-  "topic": "ICFEr",
-  "creationMode": "manual",
-  "totalCards": 0,
-  "dueToday": 0,
-  "newCards": 0,
-  "learnedCards": 0,
-  "createdAt": "ISO-8601",
-  "updatedAt": "ISO-8601"
-}
-```
-
-`creationMode` pode ser:
-
-- `manual`: deck criado como pasta/organização antes de receber cards;
-- `upload`: deck originado de PDF/DOCX do usuário;
-- `research`: deck originado de pesquisa com fontes verificáveis.
-
-## cards/{uid}/{cardId}
-
-Cada card guarda `sources[]`. A IA nunca é uma fonte. Uma fonte pode ser:
-
-- `upload` — material enviado pelo usuário;
-- `guideline` — diretriz ou protocolo;
-- `article` — artigo científico;
-- `web` — outra fonte web verificável aprovada pela camada de pesquisa.
-
-O modelo também prevê `hasSourceConflict` e `sourceConflictNote` para sinalizar
-quando fontes confiáveis divergem.
-
-## documents/{uid}/{documentId}
-
-Como o Firebase Storage está pausado, o modelo atual usa `storageMode` igual a
-`browser_only`. O arquivo bruto não é enviado ao Firebase nesta fase.
-
-## Importante sobre o console do Firebase
-
-O Realtime Database não exibe nós vazios. Por isso `cards`, `reviews`,
-`studySessions` e `documents` só aparecerão quando o primeiro registro real de
-cada tipo for salvo. `decks` passa a aparecer assim que o primeiro deck for criado.
+O Firebase Storage continua **fora do projeto**. Ao selecionar PDF/DOCX, o arquivo fica somente no navegador. O Realtime Database recebe apenas os metadados listados em `documents/{uid}/{documentId}`. O campo `extractedTextStored` permanece `false`; o texto extraído não será salvo no banco nesta fase.
