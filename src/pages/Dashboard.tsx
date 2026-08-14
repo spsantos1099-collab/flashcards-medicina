@@ -1,14 +1,15 @@
 import { Link } from "react-router-dom";
 import StatCard from "../components/StatCard";
 import DeckCard from "../components/DeckCard";
-import { mockSummary, mockDecks } from "../lib/mockData";
+import EmptyState from "../components/EmptyState";
 import { useAuth } from "../contexts/AuthContext";
+import { useDecks } from "../hooks/useDecks";
 
-// O perfil já vem do Realtime Database desde a Fase 3.
-// Os decks/estatísticas continuam mockados até a Fase 4, quando entra o CRUD real.
 export default function Dashboard() {
   const { user, profile } = useAuth();
+  const { decks, loading, totals } = useDecks(user?.uid);
   const firstName = profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || "de volta";
+  const recentDecks = decks.slice(0, 4);
 
   return (
     <div className="max-w-5xl">
@@ -34,10 +35,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard label="Para revisar hoje" value={mockSummary.dueToday} />
-        <StatCard label="Novos" value={mockSummary.newCards} />
-        <StatCard label="Estudados hoje" value={mockSummary.studiedToday} />
-        <StatCard label="Sequência" value={`${mockSummary.streakDays} dias`} />
+        <StatCard label="Para revisar hoje" value={totals.dueToday} />
+        <StatCard label="Novos" value={totals.newCards} />
+        <StatCard label="Estudados hoje" value={0} />
+        <StatCard label="Sequência" value="0 dias" />
       </div>
 
       <div className="flex items-center justify-between mb-4">
@@ -46,11 +47,40 @@ export default function Dashboard() {
           Ver biblioteca
         </Link>
       </div>
-      <div className="grid sm:grid-cols-2 gap-4">
-        {mockDecks.map((deck) => (
-          <DeckCard key={deck.id} deck={deck} />
-        ))}
-      </div>
+
+      {loading ? (
+        <div className="grid sm:grid-cols-2 gap-4">
+          {[0, 1].map((item) => (
+            <div
+              key={item}
+              className="h-32 rounded-card border border-ink-200/70 dark:border-ink-800 bg-white/70 dark:bg-ink-900 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : recentDecks.length === 0 ? (
+        <EmptyState
+          title="Nenhum deck ainda"
+          description="Crie seu primeiro deck na Biblioteca. A partir dele, você vai organizar os flashcards por especialidade e tema."
+          action={
+            <Link
+              to="/library"
+              className="inline-block rounded-lg border border-ink-200 dark:border-ink-700 px-4 py-2.5 text-sm font-medium text-ink-700 dark:text-paper hover:bg-ink-50 dark:hover:bg-ink-800 transition-colors"
+            >
+              Ir para a Biblioteca
+            </Link>
+          }
+        />
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-4">
+          {recentDecks.map((deck) => (
+            <DeckCard key={deck.id} deck={deck} />
+          ))}
+        </div>
+      )}
+
+      <p className="mt-5 text-xs text-ink-400">
+        As métricas de estudo e sequência serão preenchidas quando o sistema de revisão for ativado. Nenhum número fictício é exibido.
+      </p>
     </div>
   );
 }

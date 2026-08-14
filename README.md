@@ -1,4 +1,4 @@
-# Fichário — Flashcards médicos com IA (Fase 3)
+# Fichário — Flashcards médicos com IA (Fase 4)
 
 Plataforma de estudo médico com flashcards rastreáveis. O produto foi preparado
 para duas formas de criação: **Meu material** (PDF/DOCX do usuário) e, em fase
@@ -8,25 +8,30 @@ A IA nunca deve ser tratada como fonte: ela só transforma contexto-fonte em car
 Você não precisa rodar nada localmente. Os arquivos são enviados pelo GitHub no
 navegador e a Netlify faz o build e publica sozinha.
 
-## Onde estamos: Fase 3 de 15 — Realtime Database + perfil do usuário
+## Onde estamos: Fase 4 de 15 — decks reais
 
 Concluído nesta versão:
 
-- Firebase Authentication continua funcionando (email/senha);
-- todo usuário ganha um perfil privado em `users/{uid}` no Realtime Database;
-- contas criadas antes desta fase são migradas automaticamente no próximo login;
-- o Perfil e a saudação do Dashboard já conseguem usar os dados do banco;
-- estrutura/tipos preparados para `decks/{uid}`, `cards/{uid}`, `reviews/{uid}`,
-  `studySessions/{uid}` e `documents/{uid}`;
-- modelo de flashcard atualizado para aceitar uma ou várias fontes rastreáveis;
-- modelo preparado para origem `upload` ou `research` e para divergência de fontes;
-- Firebase Storage continua pausado: nenhum cartão/plano pago é necessário agora;
-- texto editorial da tela de autenticação atualizado sem mudar o design.
+- Fase 3 confirmada: perfil privado real em `users/{uid}`;
+- Biblioteca deixou de usar decks fictícios;
+- Dashboard deixou de usar decks e números fictícios;
+- criação de deck real em `decks/{uid}/{deckId}`;
+- edição de nome, especialidade e tema;
+- exclusão de deck;
+- busca de decks por nome, especialidade ou tema;
+- atualização automática da Biblioteca e Dashboard quando os dados mudam;
+- tela de detalhe do deck agora carrega o deck real pelo ID;
+- totais de cards/revisões vêm dos próprios decks e começam em zero;
+- métricas ainda não implementadas (estudados hoje/sequência) aparecem como zero,
+  nunca como dados demonstrativos;
+- arquitetura continua preparada para decks criados manualmente, por upload ou
+  por pesquisa com fontes verificáveis.
 
-Os decks, cards e estatísticas que aparecem nas telas ainda são demonstrativos.
-O CRUD real de decks entra na **Fase 4**.
+Os flashcards exibidos nas telas de estudo/revisão da geração ainda são de
+pré-visualização. Eles serão substituídos quando as fases de upload, extração e IA
+forem implementadas.
 
-## Estrutura preparada no Realtime Database
+## Estrutura no Realtime Database
 
 ```text
 users/{uid}
@@ -37,11 +42,8 @@ studySessions/{uid}/{sessionId}
 documents/{uid}/{documentId}
 ```
 
-Veja detalhes em `firebase/SCHEMA.md`.
-
-> Observação: o Realtime Database não mostra nós vazios no console. Nesta fase,
-> `users/{uid}` aparece de verdade. As outras raízes vão aparecer conforme dados
-> reais forem criados nas fases seguintes.
+Nesta fase, ao criar o primeiro deck, a raiz `decks` passa a aparecer de verdade
+no console do Firebase.
 
 ## FAÇA AGORA — publicar esta versão
 
@@ -56,30 +58,44 @@ Veja detalhes em `firebase/SCHEMA.md`.
 
 Não rode `npm install`, `npm run dev`, Git ou terminal no seu computador.
 
-## FAÇA AGORA — testar a Fase 3
+## FAÇA AGORA — testar a Fase 4
 
-### Teste 1 — nova frase da tela de login
+### Teste 1 — os mocks devem sumir
 
-1. Se estiver logado, abra **Perfil > Sair**.
-2. Na tela de login, confira o painel azul-marinho da direita.
-3. Ele deve mostrar:
-   - `SEU FICHÁRIO DE MEDICINA`;
-   - `Menos tempo organizando. Mais tempo aprendendo.`;
-   - o texto sobre flashcards, fontes verificáveis e revisão espaçada;
-   - `SEU MATERIAL · FONTES CONFIÁVEIS · REVISÃO INTELIGENTE`.
+1. Faça login.
+2. Abra o Dashboard.
+3. Os decks fictícios Cardiologia, Neurologia, Pneumologia e Infectologia não
+   devem mais aparecer.
+4. Como ainda não existe deck real, deve aparecer o estado vazio.
+5. Os números do topo devem estar zerados em vez de mostrar estatísticas fictícias.
 
-### Teste 2 — perfil real no Realtime Database
+### Teste 2 — criar um deck real
 
-1. Entre normalmente com a conta que você já usa. Não precisa criar outra.
-2. Acesse o console do Firebase do projeto `flashcards-medicina-7ed56`.
-3. Vá em **Build/Compilação > Realtime Database > Dados**.
-4. Deve existir `users` e, dentro dele, um identificador grande (o UID da conta).
-5. Abra esse UID. Deve aparecer `name`, `email`, `course`, `createdAt`,
-   `updatedAt` e `lastLoginAt`.
-6. No site, abra **Perfil** e confirme que nome/email continuam corretos.
+1. Abra **Biblioteca**.
+2. Clique em **+ Novo deck**.
+3. Para testar, preencha por exemplo:
+   - Nome: `Insuficiência Cardíaca`;
+   - Especialidade: `Cardiologia`;
+   - Tema: `ICFEr`.
+4. Clique em **Criar deck**.
+5. O deck deve aparecer imediatamente na Biblioteca.
+6. Volte ao Dashboard: ele também deve aparecer em **Seus decks**.
 
-Se `users/{uid}` não aparecer, envie um print da aba **Dados** do Realtime
-Database e, se a Netlify tiver falhado, um print do log do deploy.
+### Teste 3 — conferir no Firebase
+
+1. Abra Firebase > Realtime Database > **Dados**.
+2. Agora deve aparecer `decks`.
+3. Abra `decks > SEU_UID > ID_DO_DECK`.
+4. Deve existir `title`, `specialty`, `topic`, `creationMode`, os contadores em
+   zero e as datas `createdAt`/`updatedAt`.
+
+### Teste 4 — editar e excluir
+
+1. Clique no deck.
+2. Use **Editar deck**, altere alguma informação e salve.
+3. Confirme que a Biblioteca foi atualizada.
+4. Se quiser testar exclusão, clique em **Excluir** e confirme.
+5. O deck deve desaparecer também do Realtime Database.
 
 ## Regras de segurança
 
@@ -89,14 +105,15 @@ só pode ler/escrever dentro do próprio UID em `users`, `decks`, `cards`,
 
 ## Storage continua pausado
 
-O projeto não depende de Firebase Storage nesta fase. Quando chegarmos ao upload,
-o plano é processar PDF/DOCX no navegador sem guardar o arquivo bruto ou avaliar
-uma alternativa gratuita sem cartão. Não ativar Blaze/Storage agora.
+O projeto não depende de Firebase Storage. Na Fase 5, o upload será implementado
+sem exigir Blaze/cartão: o arquivo será trabalhado no navegador e só os dados
+necessários serão persistidos.
 
 ## Próxima fase
 
-**Fase 4 — criação e gerenciamento de decks com dados reais.** Nela os mocks da
-Biblioteca/Dashboard começam a ser substituídos pelo Realtime Database.
+**Fase 5 — upload de documento sem Firebase Storage pago.** A tela de criação
+passará a receber o arquivo de verdade e vinculá-lo a um deck, ainda sem depender
+de cartão ou instalação local.
 
 ## Stack
 

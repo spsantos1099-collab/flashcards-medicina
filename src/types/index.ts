@@ -6,7 +6,7 @@
 export type CardType = "basic" | "cloze" | "clinical_case";
 export type Difficulty = "easy" | "medium" | "hard";
 export type ReviewRating = "again" | "hard" | "good" | "easy";
-export type CreationMode = "upload" | "research";
+export type CreationMode = "upload" | "research" | "manual";
 export type SourceKind = "upload" | "guideline" | "article" | "web";
 export type SourceVerificationStatus = "user_material" | "verified" | "pending";
 

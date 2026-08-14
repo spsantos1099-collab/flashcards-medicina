@@ -1,7 +1,5 @@
 # Estrutura do Realtime Database — Fichário
 
-A Fase 3 prepara estas raízes privadas por usuário:
-
 ```text
 users/{uid}
 decks/{uid}/{deckId}
@@ -12,8 +10,6 @@ documents/{uid}/{documentId}
 ```
 
 ## users/{uid}
-
-O perfil é criado automaticamente no primeiro cadastro/login depois da Fase 3.
 
 ```json
 {
@@ -29,10 +25,29 @@ O perfil é criado automaticamente no primeiro cadastro/login depois da Fase 3.
 
 ## decks/{uid}/{deckId}
 
-Os decks serão persistidos na Fase 4. O modelo já prevê `creationMode`:
+A partir da Fase 4, decks são dados reais.
 
-- `upload`: criado a partir de PDF/DOCX do usuário;
-- `research`: criado a partir de pesquisa com fontes verificáveis.
+```json
+{
+  "id": "firebase-generated-id",
+  "title": "Insuficiência Cardíaca",
+  "specialty": "Cardiologia",
+  "topic": "ICFEr",
+  "creationMode": "manual",
+  "totalCards": 0,
+  "dueToday": 0,
+  "newCards": 0,
+  "learnedCards": 0,
+  "createdAt": "ISO-8601",
+  "updatedAt": "ISO-8601"
+}
+```
+
+`creationMode` pode ser:
+
+- `manual`: deck criado como pasta/organização antes de receber cards;
+- `upload`: deck originado de PDF/DOCX do usuário;
+- `research`: deck originado de pesquisa com fontes verificáveis.
 
 ## cards/{uid}/{cardId}
 
@@ -53,7 +68,6 @@ Como o Firebase Storage está pausado, o modelo atual usa `storageMode` igual a
 
 ## Importante sobre o console do Firebase
 
-O Realtime Database não exibe nós vazios. Por isso `decks`, `cards`, `reviews`,
-`studySessions` e `documents` só aparecerão na aba **Dados** quando o primeiro
-registro real de cada tipo for salvo. As regras de segurança já deixam essas
-raízes preparadas desde agora.
+O Realtime Database não exibe nós vazios. Por isso `cards`, `reviews`,
+`studySessions` e `documents` só aparecerão quando o primeiro registro real de
+cada tipo for salvo. `decks` passa a aparecer assim que o primeiro deck for criado.

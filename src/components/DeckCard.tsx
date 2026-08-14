@@ -9,6 +9,7 @@ export default function DeckCard({ deck }: { deck: Deck }) {
     >
       <div className="source-tab text-clinical-600 dark:text-clinical-300">{deck.specialty}</div>
       <h3 className="font-display text-lg mt-1 text-ink-900 dark:text-paper">{deck.title}</h3>
+      {deck.topic && <p className="text-sm text-ink-400 mt-1 line-clamp-1">{deck.topic}</p>}
       <div className="flex items-center gap-4 mt-4 text-sm">
         <span className="text-ink-500">{deck.totalCards} cards</span>
         {deck.dueToday > 0 && (

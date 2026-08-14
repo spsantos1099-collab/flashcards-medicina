@@ -1,7 +1,7 @@
 import type { User } from "firebase/auth";
-import { get, ref, set, update } from "firebase/database";
+import { get, push, ref, remove, set, update } from "firebase/database";
 import { database } from "./firebase";
-import type { UserProfile } from "../types";
+import type { Deck, UserProfile } from "../types";
 
 export type UserDataCollection =
   | "decks"
@@ -9,6 +9,18 @@ export type UserDataCollection =
   | "reviews"
   | "studySessions"
   | "documents";
+
+export interface CreateDeckInput {
+  title: string;
+  specialty: string;
+  topic?: string;
+}
+
+export interface UpdateDeckInput {
+  title: string;
+  specialty: string;
+  topic?: string;
+}
 
 function isoNow() {
   return new Date().toISOString();
@@ -91,4 +103,54 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
  */
 export function userCollectionRef(collection: UserDataCollection, uid: string) {
   return ref(database, `${collection}/${uid}`);
+}
+
+/** Cria um deck vazio real no Realtime Database. */
+export async function createDeck(uid: string, input: CreateDeckInput): Promise<Deck> {
+  const collectionRef = userCollectionRef("decks", uid);
+  const newDeckRef = push(collectionRef);
+  const id = newDeckRef.key;
+
+  if (!id) throw new Error("Não foi possível criar o identificador do deck.");
+
+  const now = isoNow();
+  const deck: Deck = {
+    id,
+    title: input.title.trim(),
+    specialty: input.specialty.trim(),
+    creationMode: "manual",
+    totalCards: 0,
+    dueToday: 0,
+    newCards: 0,
+    learnedCards: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const topic = input.topic?.trim();
+  if (topic) deck.topic = topic;
+
+  await set(newDeckRef, deck);
+  return deck;
+}
+
+/** Edita apenas os metadados que o usuário pode alterar nesta fase. */
+export async function updateDeckData(
+  uid: string,
+  deckId: string,
+  input: UpdateDeckInput,
+): Promise<void> {
+  const updates: Record<string, string | null> = {
+    title: input.title.trim(),
+    specialty: input.specialty.trim(),
+    topic: input.topic?.trim() || null,
+    updatedAt: isoNow(),
+  };
+
+  await update(ref(database, `decks/${uid}/${deckId}`), updates);
+}
+
+/** Exclui o deck. Cards ainda não existem de forma persistida nesta fase. */
+export async function deleteDeck(uid: string, deckId: string): Promise<void> {
+  await remove(ref(database, `decks/${uid}/${deckId}`));
 }
