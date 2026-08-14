@@ -4,11 +4,11 @@ import DeckCard from "../components/DeckCard";
 import { mockSummary, mockDecks } from "../lib/mockData";
 import { useAuth } from "../contexts/AuthContext";
 
-// TODO (Fase 3): substituir mockSummary/mockDecks por dados reais do
-// Realtime Database (users/{uid}, decks/{uid}).
+// O perfil já vem do Realtime Database desde a Fase 3.
+// Os decks/estatísticas continuam mockados até a Fase 4, quando entra o CRUD real.
 export default function Dashboard() {
-  const { user } = useAuth();
-  const firstName = user?.displayName?.split(" ")[0] || "de volta";
+  const { user, profile } = useAuth();
+  const firstName = profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || "de volta";
 
   return (
     <div className="max-w-5xl">

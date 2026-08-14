@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-// TODO (Fase 5): ligar ao Firebase Storage (upload real) e ao pdfjs-dist/mammoth
+// TODO (Fases 5/6): processar o arquivo no navegador, sem Firebase Storage pago, e ligar ao pdfjs-dist/mammoth
 // para extração de conteúdo (Fase 6).
 export default function CreateUpload() {
   const navigate = useNavigate();

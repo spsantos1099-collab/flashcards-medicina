@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { mockDecks } from "../lib/mockData";
 
-// TODO (Fase 3): carregar deck e lista de cards reais por :deckId no Realtime Database.
+// TODO (Fase 4): carregar deck e lista de cards reais por :deckId no Realtime Database.
 export default function DeckDetail() {
   const { deckId } = useParams();
   const deck = mockDecks.find((d) => d.id === deckId) ?? mockDecks[0];

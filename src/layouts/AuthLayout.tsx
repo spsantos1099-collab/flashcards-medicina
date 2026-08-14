@@ -23,14 +23,23 @@ export default function AuthLayout() {
         </div>
       </div>
 
-      {/* Coluna editorial — citação/contexto, escondida no mobile */}
+      {/* Coluna editorial — mesmo design, agora apresentando o próprio Fichário */}
       <div className="hidden lg:flex flex-col justify-between bg-ink-900 text-paper px-14 py-14 relative overflow-hidden">
-        <div className="source-tab text-ink-200">Cardiologia · Insuficiência Cardíaca</div>
-        <blockquote className="font-display text-3xl leading-snug max-w-md">
-          "FEVE ≤ 40% define a insuficiência cardíaca com fração de ejeção reduzida."
-        </blockquote>
+        <div className="source-tab text-ink-200">SEU FICHÁRIO DE MEDICINA</div>
+
+        <div className="max-w-md">
+          <blockquote className="font-display text-3xl leading-snug">
+            Menos tempo organizando.
+            <br />
+            Mais tempo aprendendo.
+          </blockquote>
+          <p className="mt-5 text-sm leading-relaxed text-ink-200 max-w-sm">
+            Flashcards inteligentes, fontes verificáveis e revisão espaçada em um só lugar.
+          </p>
+        </div>
+
         <div className="source-tab text-ink-200">
-          Fonte · Diretriz Brasileira de IC · p. 18
+          SEU MATERIAL · FONTES CONFIÁVEIS · REVISÃO INTELIGENTE
         </div>
       </div>
     </div>

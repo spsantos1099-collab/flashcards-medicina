@@ -1,5 +1,6 @@
-// Dados fictícios só para visualizar a interface na Fase 1.
-// Serão substituídos por dados reais do Firebase Realtime Database na Fase 3.
+// Dados fictícios mantidos apenas para visualizar as telas de decks/estudo.
+// O perfil do usuário já é real (Realtime Database) desde a Fase 3.
+// Decks/cards serão substituídos por dados reais nas próximas fases.
 import type { Deck, Flashcard, DashboardSummary } from "../types";
 
 export const mockSummary: DashboardSummary = {
@@ -18,6 +19,7 @@ export const mockDecks: Deck[] = [
     dueToday: 32,
     newCards: 14,
     learnedCards: 96,
+    creationMode: "upload",
     sourceDocumentName: "Diretriz Brasileira de Insuficiência Cardíaca.pdf",
     updatedAt: new Date().toISOString(),
   },
@@ -29,6 +31,7 @@ export const mockDecks: Deck[] = [
     dueToday: 14,
     newCards: 9,
     learnedCards: 63,
+    creationMode: "research",
     updatedAt: new Date().toISOString(),
   },
   {
@@ -39,6 +42,7 @@ export const mockDecks: Deck[] = [
     dueToday: 28,
     newCards: 11,
     learnedCards: 78,
+    creationMode: "upload",
     updatedAt: new Date().toISOString(),
   },
   {
@@ -49,6 +53,7 @@ export const mockDecks: Deck[] = [
     dueToday: 6,
     newCards: 3,
     learnedCards: 64,
+    creationMode: "research",
     updatedAt: new Date().toISOString(),
   },
 ];
@@ -63,11 +68,16 @@ export const mockCards: Flashcard[] = [
     topic: "Cardiologia · Insuficiência Cardíaca",
     tags: ["ICFEr"],
     difficulty: "medium",
-    source: {
-      documentName: "Diretriz Brasileira de Insuficiência Cardíaca.pdf",
-      page: 18,
-      section: "Classificação",
-    },
+    sources: [
+      {
+        id: "src-c1-1",
+        kind: "upload",
+        title: "Diretriz Brasileira de Insuficiência Cardíaca.pdf",
+        page: 18,
+        section: "Classificação",
+        verificationStatus: "user_material",
+      },
+    ],
     createdAt: new Date().toISOString(),
   },
 ];

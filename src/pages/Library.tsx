@@ -3,7 +3,7 @@ import SearchInput from "../components/SearchInput";
 import EmptyState from "../components/EmptyState";
 import { mockDecks } from "../lib/mockData";
 
-// TODO (Fase 3+): pesquisar/filtrar/ordenar de verdade contra o Realtime Database.
+// TODO (Fase 4+): pesquisar/filtrar/ordenar de verdade contra o Realtime Database.
 export default function Library() {
   return (
     <div className="max-w-5xl">

@@ -7,11 +7,11 @@ interface StudyCardProps {
 
 // O card de estudo é a peça central da interface. A "aba" no topo, com
 // especialidade/assunto, e o rodapé de fonte (rastreabilidade) em fonte
-// monoespaçada são o elemento de assinatura do produto — todo card deixa
-// claro de onde a informação veio, o que é o diferencial pedido no briefing.
+// monoespaçada são o elemento de assinatura do produto.
 export default function StudyCard({ card }: StudyCardProps) {
   const [revealed, setRevealed] = useState(false);
   const [showSource, setShowSource] = useState(false);
+  const hasSources = card.sources.length > 0;
 
   return (
     <div className="max-w-xl mx-auto">
@@ -32,19 +32,29 @@ export default function StudyCard({ card }: StudyCardProps) {
             {card.explanation && (
               <p className="text-sm text-ink-500 mt-3">{card.explanation}</p>
             )}
-            {card.source && (
+
+            {hasSources && (
               <button
                 onClick={() => setShowSource((s) => !s)}
                 className="mt-4 source-tab text-ink-400 hover:text-clinical-600 dark:hover:text-clinical-300 underline underline-offset-4 decoration-dotted"
               >
-                Ver fonte
+                {card.sources.length === 1 ? "Ver fonte" : `Ver fontes (${card.sources.length})`}
               </button>
             )}
-            {showSource && card.source && (
-              <div className="mt-2 text-xs text-ink-400 font-data">
-                {card.source.documentName}
-                {card.source.page ? ` · p. ${card.source.page}` : ""}
-                {card.source.section ? ` · ${card.source.section}` : ""}
+
+            {showSource && hasSources && (
+              <div className="mt-2 space-y-2 text-xs text-ink-400 font-data">
+                {card.sources.map((source) => (
+                  <div key={source.id}>
+                    {source.provider ? `${source.provider} · ` : ""}
+                    {source.title}
+                    {source.page ? ` · p. ${source.page}` : ""}
+                    {source.section ? ` · ${source.section}` : ""}
+                  </div>
+                ))}
+                {card.hasSourceConflict && card.sourceConflictNote && (
+                  <div className="text-signal-600">Fontes divergem · {card.sourceConflictNote}</div>
+                )}
               </div>
             )}
           </div>

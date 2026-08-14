@@ -1,15 +1,51 @@
-// Tipos de domínio da plataforma. Ainda não ligados ao Firebase (isso entra na Fase 3,
-// quando desenharmos a estrutura real do Realtime Database).
+// Tipos de domínio da plataforma.
+// A partir da Fase 3, estes tipos já refletem a estrutura preparada para o
+// Firebase Realtime Database e para as duas origens de conteúdo do Fichário:
+// material enviado pelo usuário e pesquisa com fontes verificáveis.
 
 export type CardType = "basic" | "cloze" | "clinical_case";
 export type Difficulty = "easy" | "medium" | "hard";
 export type ReviewRating = "again" | "hard" | "good" | "easy";
+export type CreationMode = "upload" | "research";
+export type SourceKind = "upload" | "guideline" | "article" | "web";
+export type SourceVerificationStatus = "user_material" | "verified" | "pending";
 
+export interface UserProfile {
+  uid: string;
+  name: string;
+  email: string;
+  course: "Medicina";
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string;
+}
+
+/**
+ * Uma fonte rastreável usada na criação de um flashcard.
+ *
+ * - upload: PDF/DOCX enviado pelo usuário;
+ * - guideline: diretriz/protocolo médico;
+ * - article: artigo científico;
+ * - web: outra fonte web verificável aprovada pela camada de pesquisa.
+ *
+ * Um card pode ter uma ou várias fontes. A IA nunca deve ser tratada como fonte.
+ */
 export interface CardSource {
-  documentName: string;
+  id: string;
+  kind: SourceKind;
+  title: string;
+  provider?: string;
+  documentId?: string;
   page?: number;
   section?: string;
   excerpt?: string;
+  url?: string;
+  publishedAt?: string;
+  accessedAt?: string;
+  country?: string;
+  pmid?: string;
+  doi?: string;
+  verificationStatus: SourceVerificationStatus;
 }
 
 export interface Flashcard {
@@ -22,9 +58,12 @@ export interface Flashcard {
   topic: string;
   tags: string[];
   difficulty: Difficulty;
-  source?: CardSource;
+  sources: CardSource[];
+  hasSourceConflict?: boolean;
+  sourceConflictNote?: string;
   isFavorite?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Deck {
@@ -32,12 +71,43 @@ export interface Deck {
   title: string;
   specialty: string;
   topic?: string;
+  creationMode?: CreationMode;
   totalCards: number;
   dueToday: number;
   newCards: number;
   learnedCards: number;
   sourceDocumentName?: string;
+  createdAt?: string;
   updatedAt: string;
+}
+
+export interface DocumentRecord {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes?: number;
+  extractionStatus: "pending" | "processing" | "ready" | "error";
+  storageMode: "browser_only";
+  extractedTextStored: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewRecord {
+  id: string;
+  cardId: string;
+  deckId: string;
+  rating: ReviewRating;
+  reviewedAt: string;
+  nextReviewAt?: string;
+}
+
+export interface StudySessionRecord {
+  id: string;
+  deckId?: string;
+  startedAt: string;
+  endedAt?: string;
+  reviewedCards: number;
 }
 
 export interface DashboardSummary {

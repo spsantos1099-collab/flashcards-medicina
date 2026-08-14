@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -15,9 +15,9 @@ export default function Profile() {
       <h1 className="font-display text-2xl text-ink-900 dark:text-paper mb-6">Perfil</h1>
 
       <div className="rounded-card border border-ink-200/70 dark:border-ink-800 bg-white dark:bg-ink-900 p-5 shadow-card flex flex-col gap-3">
-        <Row label="Nome" value={user?.displayName || "—"} />
-        <Row label="Email" value={user?.email || "—"} />
-        <Row label="Curso" value="Medicina" />
+        <Row label="Nome" value={profile?.name || user?.displayName || "—"} />
+        <Row label="Email" value={profile?.email || user?.email || "—"} />
+        <Row label="Curso" value={profile?.course || "Medicina"} />
       </div>
 
       <button onClick={handleLogout} className="mt-6 text-sm text-signal-600 font-medium">
