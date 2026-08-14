@@ -1,16 +1,28 @@
-// TODO (Fase 2): puxar nome/email reais do Firebase Authentication e implementar logout.
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+
 export default function Profile() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   return (
     <div className="max-w-md">
       <h1 className="font-display text-2xl text-ink-900 dark:text-paper mb-6">Perfil</h1>
 
       <div className="rounded-card border border-ink-200/70 dark:border-ink-800 bg-white dark:bg-ink-900 p-5 shadow-card flex flex-col gap-3">
-        <Row label="Nome" value="Ana" />
-        <Row label="Email" value="—" />
+        <Row label="Nome" value={user?.displayName || "—"} />
+        <Row label="Email" value={user?.email || "—"} />
         <Row label="Curso" value="Medicina" />
       </div>
 
-      <button className="mt-6 text-sm text-signal-600 font-medium">Sair</button>
+      <button onClick={handleLogout} className="mt-6 text-sm text-signal-600 font-medium">
+        Sair
+      </button>
     </div>
   );
 }

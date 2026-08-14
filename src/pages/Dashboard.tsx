@@ -2,15 +2,19 @@ import { Link } from "react-router-dom";
 import StatCard from "../components/StatCard";
 import DeckCard from "../components/DeckCard";
 import { mockSummary, mockDecks } from "../lib/mockData";
+import { useAuth } from "../contexts/AuthContext";
 
 // TODO (Fase 3): substituir mockSummary/mockDecks por dados reais do
 // Realtime Database (users/{uid}, decks/{uid}).
 export default function Dashboard() {
+  const { user } = useAuth();
+  const firstName = user?.displayName?.split(" ")[0] || "de volta";
+
   return (
     <div className="max-w-5xl">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-display text-3xl text-ink-900 dark:text-paper">Olá, Ana 👋</h1>
+          <h1 className="font-display text-3xl text-ink-900 dark:text-paper">Olá, {firstName} 👋</h1>
           <p className="text-ink-400 mt-1">Pronta para revisar?</p>
         </div>
         <div className="flex gap-3">

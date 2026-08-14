@@ -1,6 +1,13 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, Navigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function AuthLayout() {
+  const { user, loading } = useAuth();
+
+  if (!loading && user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* Coluna de formulário */}

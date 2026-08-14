@@ -1,14 +1,42 @@
-import { Link } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { friendlyAuthError } from "../../lib/authErrors";
 
-// TODO (Fase 2): ligar ao Firebase Authentication (signInWithEmailAndPassword)
-// e traduzir erros como auth/invalid-credential para mensagens humanas.
 export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email, password);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <form className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <h1 className="font-display text-2xl text-ink-900 dark:text-paper">Entrar</h1>
 
-      <Field label="Email" type="email" name="email" />
-      <Field label="Senha" type="password" name="password" />
+      {error && (
+        <div className="text-sm text-signal-600 bg-signal-400/10 border border-signal-600/30 rounded-lg px-3.5 py-2.5">
+          {error}
+        </div>
+      )}
+
+      <Field label="Email" type="email" value={email} onChange={setEmail} />
+      <Field label="Senha" type="password" value={password} onChange={setPassword} />
 
       <Link to="/forgot-password" className="text-sm text-clinical-600 dark:text-clinical-300 -mt-2">
         Esqueci minha senha
@@ -16,9 +44,10 @@ export default function Login() {
 
       <button
         type="submit"
-        className="mt-2 rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-2.5 text-sm font-medium hover:bg-ink-800 dark:hover:bg-clinical-500 transition-colors"
+        disabled={submitting}
+        className="mt-2 rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-2.5 text-sm font-medium hover:bg-ink-800 dark:hover:bg-clinical-500 transition-colors disabled:opacity-60"
       >
-        Entrar
+        {submitting ? "Entrando…" : "Entrar"}
       </button>
 
       <p className="text-sm text-ink-400 text-center mt-2">
@@ -31,13 +60,24 @@ export default function Login() {
   );
 }
 
-function Field({ label, type, name }: { label: string; type: string; name: string }) {
+function Field({
+  label,
+  type,
+  value,
+  onChange,
+}: {
+  label: string;
+  type: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <label className="flex flex-col gap-1.5 text-sm">
       <span className="text-ink-600 dark:text-ink-200">{label}</span>
       <input
         type={type}
-        name={name}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         required
         className="rounded-lg border border-ink-200 dark:border-ink-800 bg-transparent px-3.5 py-2.5 text-ink-900 dark:text-paper focus:border-clinical-500"
       />

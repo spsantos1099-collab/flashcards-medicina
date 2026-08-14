@@ -1,11 +1,24 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, Navigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import MobileNavigation from "./MobileNavigation";
+import { useAuth } from "../contexts/AuthContext";
 
-// TODO (Fase 2): envolver com verificação de sessão do Firebase Auth e
-// redirecionar para /login quando não houver usuário autenticado.
 export default function AppShell() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-ink-400 text-sm">
+        Carregando…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen flex">
       <Sidebar />
