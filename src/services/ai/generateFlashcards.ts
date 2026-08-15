@@ -13,13 +13,14 @@ import type {
 const MAX_DOCUMENT_CHARACTERS = 120_000;
 const ATOMIC_SLICE_CHARACTERS = 5_500;
 const FAST_BATCH_CHARACTERS = 12_000;
-const CLINICAL_BATCH_CHARACTERS = 8_500;
+const CLINICAL_BATCH_CHARACTERS = 6_500;
 const MAX_FAST_CARDS_PER_BATCH = 4;
-const MAX_CLINICAL_CARDS_PER_BATCH = 4;
-const MAX_REFILL_ROUNDS = 3;
+const MAX_CLINICAL_CARDS_PER_BATCH = 3;
+const MAX_REFILL_ROUNDS = 6;
+const MAX_EMPTY_REFILL_ROUNDS = 3;
 const MAX_EXCLUDED_QUESTIONS = 40;
 const MAX_EXCLUDED_OBJECTIVES = 40;
-const MAX_REQUEST_ATTEMPTS = 3;
+const MAX_REQUEST_ATTEMPTS = 4;
 const BETWEEN_CALLS_MS = 350;
 
 interface ApiEvidence {
@@ -346,7 +347,7 @@ function buildRefillBatch(
   return {
     pages: selected,
     cardType,
-    cardCount: Math.min(maxCardsPerBatch(cardType), Math.max(2, remainingCards + 1)),
+    cardCount: Math.min(maxCardsPerBatch(cardType), Math.max(1, remainingCards + (cardType === "clinical_case" ? 1 : 2))),
   };
 }
 
@@ -504,7 +505,7 @@ async function withAutomaticRetry<T>({
       const base = 900 * 2 ** (attempt - 1);
       const jitter = Math.round(Math.random() * 450);
       const providerDelay = error.retryAfterMs ?? 0;
-      await sleep(Math.min(8_000, Math.max(base + jitter, providerDelay)));
+      await sleep(Math.min(7_000, Math.max(base + jitter, providerDelay)));
     }
   }
 
@@ -846,6 +847,7 @@ export async function generateFlashcardsFromDocument({
     });
   }
 
+  let consecutiveEmptyRefillRounds = 0;
   for (let refillRound = 1; refillRound <= MAX_REFILL_ROUNDS && collectedCards.length < options.cardCount; refillRound += 1) {
     let addedThisRound = 0;
 
@@ -877,7 +879,15 @@ export async function generateFlashcardsFromDocument({
       if (collectedCards.length >= options.cardCount) break;
     }
 
-    if (addedThisRound === 0 && refillRound >= 2) break;
+    if (addedThisRound === 0) {
+      consecutiveEmptyRefillRounds += 1;
+    } else {
+      consecutiveEmptyRefillRounds = 0;
+    }
+
+    // Não abandona a reposição após uma única rodada ruim. Isso é especialmente
+    // importante para casos clínicos, que podem ser rejeitados pelo segundo revisor.
+    if (consecutiveEmptyRefillRounds >= MAX_EMPTY_REFILL_ROUNDS) break;
   }
 
   // Respeita os alvos por tipo e o total solicitado. Se um tipo ficou abaixo por

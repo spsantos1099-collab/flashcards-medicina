@@ -3,8 +3,8 @@ const CLINICAL_MODEL = process.env.GEMINI_FLASHCARD_CLINICAL_MODEL || "gemini-3.
 const VALIDATOR_MODEL = process.env.GEMINI_FLASHCARD_VALIDATOR_MODEL || "gemini-3.5-flash";
 const MAX_REQUEST_CHARACTERS = 24_000;
 const FAST_TIMEOUT_MS = 20_000;
-const CLINICAL_TIMEOUT_MS = 24_000;
-const VALIDATOR_TIMEOUT_MS = 22_000;
+const CLINICAL_TIMEOUT_MS = 23_000;
+const VALIDATOR_TIMEOUT_MS = 21_000;
 const ALLOWED_TYPES = new Set(["basic", "cloze", "clinical_case"]);
 const ALLOWED_DIFFICULTIES = new Set(["easy", "medium", "hard"]);
 
@@ -63,7 +63,7 @@ function normalizeInput(body) {
   const requestedType = ALLOWED_TYPES.has(options.requestedType)
     ? options.requestedType
     : cardTypes[0] || "basic";
-  const maxCards = requestedType === "clinical_case" ? 4 : 6;
+  const maxCards = requestedType === "clinical_case" ? 3 : 6;
 
   return {
     task: body?.task === "validate_clinical" ? "validate_clinical" : "generate",
@@ -132,18 +132,24 @@ function buildGenerationPrompt(input) {
 
   const typeRules = type === "clinical_case"
     ? `TIPO OBRIGATÓRIO: clinical_case. Gere SOMENTE casos clínicos curtos, realistas e orientados a uma decisão.
-- Cada caso deve testar UM objetivo principal: diagnóstico, classificação, indicação, contraindicação, conduta, encaminhamento, dose/limiar aplicado ou segurança.
-- Não transforme o caso em uma lista de memorização. O enunciado deve exigir aplicação dos critérios do documento.
-- Você pode criar valores sintéticos (idade, FE, BNP, TFG etc.) APENAS quando eles forem derivados diretamente de um limiar explícito do documento e servirem para testar esse limiar. Ex.: se o documento diz idade < 75, você pode usar 62 ou 78 para testar inclusão/exclusão.
-- Não invente comorbidades, exames, sintomas ou condutas que não estejam sustentados no documento e que sejam necessários para a conclusão.
+- Cada caso deve testar UM objetivo principal: diagnóstico, classificação, indicação, contraindicação, conduta, encaminhamento, limiar aplicado, segurança ou interpretação de um critério.
+- O caso precisa exigir aplicação/raciocínio. Se a pergunta poderia ser feita praticamente igual sem o paciente (por exemplo, apenas "qual é a dose de X?"), isso NÃO é um bom caso clínico: transforme o objetivo em uma decisão clínica ou escolha outro objetivo.
+- Você PODE criar BACKGROUND NARRATIVO plausível que não determine a resposta: idade/sexo, local de atendimento, profissão, retorno ambulatorial, acompanhante, rotina e detalhes neutros que deem naturalidade ao caso. Esses detalhes não precisam constar literalmente no documento.
+- Você também pode criar detalhes clínicos de ambientação, desde que NÃO introduzam uma regra médica nova nem sejam necessários para justificar a resposta. Ex.: "idoso, de baixo peso, pesando 45 kg" é aceitável se o documento já traz "baixo peso"; NÃO conclua que 45 kg, sozinho, é o corte de baixo peso se o documento não definiu esse limiar.
+- DADOS DECISIVOS precisam ser sustentados pelo documento: critérios, sinais/sintomas que mudam classificação, exames decisivos, valores-limite, doses, contraindicações, indicações, conectores E/OU e a relação que leva à conduta.
+- Você pode criar valores sintéticos (idade, FE, BNP, TFG, potássio etc.) quando eles testarem diretamente um limiar explícito. Ex.: se o documento diz idade < 75, 62 ou 78 podem ser usados para testar inclusão/exclusão.
+- Não invente limiares, critérios, contraindicações, indicações, relações causais ou conhecimentos médicos necessários para chegar à resposta.
+- Um caso pode conter informação neutra/irrelevante para parecer prova real, mas nunca um detalhe enganoso que exija conhecimento externo ao documento para ser descartado.
 - Se uma regra usa OU, basta uma condição verdadeira; não conclua “não” porque as outras condições estão ausentes. Se uma regra usa E/combinação obrigatória, inclua TODOS os critérios necessários antes de concluir elegibilidade.
-- Antes de responder, confira se a conclusão decorre logicamente dos dados do caso e das regras do documento.
-- evidences deve conter TODOS os trechos necessários para sustentar os dados decisivos e a regra usada na resposta (1 a 5 evidências).`
+- Antes de responder, confira se a conclusão decorre logicamente dos dados decisivos do caso e das regras do documento.
+- evidences deve conter TODOS os trechos necessários para sustentar os dados decisivos e a regra usada na resposta (1 a 5 evidências). Background puramente narrativo não precisa de evidência.`
     : type === "cloze"
       ? `TIPO OBRIGATÓRIO: cloze. Gere SOMENTE cards Cloze.
-- Esconda apenas o elemento de maior valor de recuperação com {{c1::...}}; use no máximo duas lacunas e somente se fizerem parte do MESMO conceito.
-- Cloze é especialmente adequado para limiares, doses, classificações, critérios e relações canônicas.
-- Não esconda palavras banais nem transforme frases longas em lacunas triviais.
+- Regra padrão: use UMA lacuna de alto valor com {{c1::...}}. Use DUAS apenas quando forem um par inseparável do mesmo objetivo (ex.: dose inicial + dose alvo; dois limiares pareados).
+- Cloze é especialmente adequado para limiares, doses, classificações, critérios, nomes de conduta e relações canônicas.
+- Não esconda palavras genéricas/banais (ex.: "aeróbico", "paciente", "tratamento") só para criar uma lacuna. A parte oculta deve ser exatamente o conhecimento que vale recuperar em prova.
+- Se uma frase contém uma escala com três ou mais categorias (ex.: improvável/possível/definitivo), NÃO esconda apenas duas e deixe a terceira visível. Prefira um card focado em uma única faixa ou reformule para um único objetivo atômico.
+- Não faça uma frase longa com muitos dados expostos e apenas um blank pouco informativo. O enunciado deve direcionar claramente para a informação oculta.
 - evidences deve conter exatamente 1 evidência que sustente diretamente o card.`
       : `TIPO OBRIGATÓRIO: basic. Gere SOMENTE cards Básicos.
 - Faça pergunta direta com resposta curta e objetiva.
@@ -222,16 +228,21 @@ function buildClinicalValidatorPrompt(input, candidates) {
   return `Você é o SEGUNDO REVISOR de qualidade de casos clínicos médicos. Você NÃO cria nem corrige cards: apenas ACEITA ou REJEITA cada caso.
 Use SOMENTE o documento fornecido. Seja conservador: se houver dúvida lógica, rejeite.
 
-Para cada caso, verifique TODOS os itens:
-1. A resposta decorre logicamente dos dados do caso e das regras do documento.
-2. Nenhum dado decisivo do enunciado exige conhecimento externo ao documento.
+Para cada caso, separe mentalmente o enunciado em BACKGROUND e DADOS DECISIVOS.
+- BACKGROUND narrativo (idade/sexo, profissão, local de atendimento, acompanhante, rotina, detalhes neutros) pode ser criado para dar realismo e não precisa estar literalmente no documento, desde que NÃO mude a resposta.
+- DADO DECISIVO é qualquer informação clínica usada para chegar à resposta: critério, sintoma que muda classificação, exame/valor-limite, indicação, contraindicação, dose, relação causal ou conector E/OU. Esses dados e a regra decisória precisam ser sustentados pelo documento.
+
+Verifique TODOS os itens:
+1. A resposta decorre logicamente dos dados decisivos do caso e das regras do documento.
+2. Nenhum dado decisivo exige conhecimento externo. Background puramente narrativo não é motivo de rejeição.
 3. Todos os critérios obrigatórios para a conclusão estão presentes. Não aceite elegibilidade baseada em critério faltante.
 4. Conectores lógicos estão corretos: em listas com OU, uma condição suficiente não pode ser ignorada; em regras combinadas com E, todos os critérios exigidos devem estar satisfeitos.
 5. Não há contradição entre enunciado, resposta e evidências.
-6. O caso testa um único objetivo principal e não depende de pegadinha causada por informação omitida.
-7. Os valores sintéticos usados no caso são compatíveis com os limiares explícitos do documento.
-8. A explicação não acrescenta conhecimento médico externo.
-9. A lista evidences cobre os trechos necessários para auditar os dados decisivos do caso e a regra que leva à resposta; se o raciocínio depende de vários fatos, uma única evidência insuficiente deve ser rejeitada.
+6. O caso testa um único objetivo principal e realmente exige aplicação/decisão. REJEITE se for apenas uma pergunta factual disfarçada de caso (ex.: inserir um paciente e perguntar uma dose que independe completamente dos dados do paciente).
+7. Valores sintéticos usados para testar limiares explícitos são coerentes. Se o documento diz apenas "baixo peso" sem definir corte, um peso em kg pode aparecer como detalhe narrativo SOMENTE se o próprio enunciado também qualificar o paciente como "de baixo peso"; não aceite inferência de um corte inexistente.
+8. A explicação não acrescenta conhecimento médico externo nem transforma background narrativo em regra médica.
+9. A lista evidences cobre os trechos necessários para auditar TODOS os dados decisivos e a regra que leva à resposta; background neutro não exige evidência.
+10. Informações neutras podem enriquecer o cenário, mas REJEITE detalhes enganosos que só possam ser descartados com conhecimento de fora do documento.
 
 Exemplo de erro a REJEITAR: o documento diz “congestão persistente OU NYHA III-IV OU hiponatremia”, o caso é NYHA III e a resposta diz que não há indicação porque não há congestão/hiponatremia. Isso viola o OU.
 
@@ -268,6 +279,19 @@ function numericTokens(value) {
   return normalizeForSourceCheck(value).match(/\d+(?:\s+\d+)*/g) || [];
 }
 
+function orderedTokenCoverage(excerptTokens, pageTokens) {
+  if (!excerptTokens.length || !pageTokens.length) return 0;
+  let pageIndex = 0;
+  let matched = 0;
+  for (const token of excerptTokens) {
+    while (pageIndex < pageTokens.length && pageTokens[pageIndex] !== token) pageIndex += 1;
+    if (pageIndex >= pageTokens.length) break;
+    matched += 1;
+    pageIndex += 1;
+  }
+  return matched / excerptTokens.length;
+}
+
 function sourceMatchScore(sourceExcerpt, pageText) {
   const excerpt = normalizeForSourceCheck(sourceExcerpt);
   const page = normalizeForSourceCheck(pageText);
@@ -275,15 +299,21 @@ function sourceMatchScore(sourceExcerpt, pageText) {
   if (page.includes(excerpt)) return 1;
 
   const excerptTokens = excerpt.split(" ").filter(Boolean);
+  const pageTokens = page.split(" ").filter(Boolean);
   if (excerptTokens.length < 5) return 0;
-  const pageTokenSet = new Set(page.split(" ").filter(Boolean));
+  const pageTokenSet = new Set(pageTokens);
   const matched = excerptTokens.filter((token) => pageTokenSet.has(token)).length;
-  const coverage = matched / excerptTokens.length;
+  const bagCoverage = matched / excerptTokens.length;
+  const orderedCoverage = orderedTokenCoverage(excerptTokens, pageTokens);
 
   const numbers = numericTokens(excerpt);
   const pageNumbers = new Set(numericTokens(page));
   const numbersPreserved = numbers.every((token) => pageNumbers.has(token));
-  return numbersPreserved ? coverage : Math.min(coverage, 0.69);
+  if (!numbersPreserved) return Math.min(Math.max(bagCoverage, orderedCoverage), 0.69);
+
+  // Excertos de PDF podem chegar com hifens/espaços/Unicode diferentes.
+  // A ordem das palavras vale mais que mera coincidência de vocabulário.
+  return Math.max(orderedCoverage, bagCoverage * 0.92);
 }
 
 function findSourcePage(sourceExcerpt, input, preferredPage = 0) {
@@ -308,7 +338,7 @@ function findSourcePage(sourceExcerpt, input, preferredPage = 0) {
     if (score >= 0.999) return page.pageNumber;
   }
 
-  return bestScore >= 0.88 ? bestPage : 0;
+  return bestScore >= 0.82 ? bestPage : 0;
 }
 
 function normalizeCardType(value) {
@@ -413,6 +443,25 @@ function cardsAreSemanticDuplicates(a, b) {
   return Boolean(sameAnswer && sameEvidence && objectiveSimilarity >= 0.45);
 }
 
+function clozeValues(question) {
+  return [...String(question || "").matchAll(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g)]
+    .map((match) => cleanText(match[1], 300))
+    .filter(Boolean);
+}
+
+function passesClozeQualityGuard(card) {
+  const values = clozeValues(card.question);
+  if (values.length < 1 || values.length > 2) return false;
+
+  // Evita blanks quase sem conteúdo, mantendo classificações curtas como IV/II.
+  if (values.some((value) => value.length === 1 && !/^[IVX]+$/i.test(value) && !/^\d$/.test(value))) return false;
+
+  // Duas lacunas devem representar um par coerente; respostas muito distintas e longas
+  // tendem a indicar que o card juntou objetivos independentes.
+  if (values.length === 2 && values.some((value) => value.length > 80)) return false;
+  return true;
+}
+
 function sanitizeCards(cards, input) {
   const accepted = [];
   const requestedType = input.options.requestedType;
@@ -439,7 +488,7 @@ function sanitizeCards(cards, input) {
 
     if (type !== requestedType || !card.question || !card.answer || !card.learningObjective) continue;
     if (!passesAtomicityGuard(card)) continue;
-    if (type === "cloze" && !/\{\{c\d+::.+?\}\}/.test(card.question)) continue;
+    if (type === "cloze" && (!/\{\{c\d+::.+?\}\}/.test(card.question) || !passesClozeQualityGuard(card))) continue;
     if (evidences.length === 0) continue;
     if (accepted.some((existing) => cardsAreSemanticDuplicates(existing, card))) continue;
     accepted.push(card);

@@ -6,7 +6,7 @@ posterior, **Pesquisar por tema** (diretrizes, artigos e outras fontes médicas
 verificáveis). A IA nunca é tratada como fonte: ela transforma um contexto-fonte
 em cards e cada card guarda sua origem.
 
-## Estado atual — Fase 7.6
+## Estado atual — Fase 7.7
 
 Já estão funcionando:
 
@@ -24,7 +24,7 @@ Já estão funcionando:
 - sintaxe técnica de Cloze escondida da interface;
 - rastreabilidade por uma ou várias evidências do documento.
 
-## Pipeline confiável de geração — Fase 7.6
+## Pipeline confiável de geração — Fase 7.7
 
 A geração deixou de ser uma única chamada de IA. O fluxo agora é:
 
@@ -108,6 +108,18 @@ extração, como:
 Isso reduz falsos descartes sem aceitar uma afirmação que não esteja realmente
 ancorada na página indicada.
 
+
+## Refinamentos da Fase 7.7
+
+- casos clínicos distinguem **background narrativo** de **dados decisivos**;
+- detalhes de cenário podem ser criados para dar realismo, desde que não inventem uma regra médica;
+- dados que determinam diagnóstico/conduta continuam obrigatoriamente ancorados no documento;
+- o segundo revisor rejeita "casos" que são apenas perguntas factuais com um paciente decorativo;
+- Cloze usa, por padrão, uma única lacuna de alto valor e evita esconder palavras banais;
+- a verificação de fonte tolera melhor artefatos de extração sem abandonar a página-fonte;
+- casos clínicos são gerados em lotes menores para reduzir timeout;
+- a reposição automática é mais persistente e suporta várias rodadas sem perder cards já aprovados.
+
 ## Qualidade pedagógica
 
 - **1 card = 1 objetivo principal de recuperação**;
@@ -174,6 +186,6 @@ Não é necessário rodar `npm install`, `npm run dev` ou Git no computador loca
 
 ## Próxima etapa
 
-Depois de validar o pipeline 7.6 com materiais reais, a próxima etapa é liberar
+Depois de validar o pipeline 7.7 com materiais reais, a próxima etapa é liberar
 **edição/aprovação individual e salvamento dos cards no Firebase**, antes do modo
 de estudo e repetição espaçada.

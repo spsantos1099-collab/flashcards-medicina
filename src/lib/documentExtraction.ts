@@ -68,13 +68,42 @@ async function extractPdf(file: File, documentId: string): Promise<ExtractedDocu
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
       let pageText = "";
 
-      for (const item of content.items) {
-        if (!("str" in item)) continue;
-        pageText += item.str;
-        pageText += item.hasEOL ? "\n" : " ";
+      // Safari/iOS (inclusive versões recentes) pode falhar em
+      // page.getTextContent() porque o PDF.js itera o ReadableStream com
+      // `for await...of`. O reader explícito é compatível com WebKit e
+      // funciona também nos navegadores desktop.
+      try {
+        const reader = page.streamTextContent().getReader();
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (!value) continue;
+
+            for (const item of value.items) {
+              if (!("str" in item)) continue;
+              pageText += item.str;
+              pageText += item.hasEOL ? "\n" : " ";
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      } catch (streamError) {
+        // Fallback para ambientes onde streamTextContent não esteja
+        // disponível/funcional. No Safari atual o caminho acima é o
+        // preferido justamente para evitar a falha de getTextContent().
+        console.warn("Leitura por stream falhou; tentando modo alternativo.", streamError);
+        const content = await page.getTextContent();
+
+        for (const item of content.items) {
+          if (!("str" in item)) continue;
+          pageText += item.str;
+          pageText += item.hasEOL ? "\n" : " ";
+        }
       }
 
       const text = normalizeText(pageText);
