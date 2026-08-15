@@ -296,24 +296,26 @@ export default function CreateConfigure() {
       </div>
 
       <div className="rounded-card border border-clinical-300 dark:border-clinical-700/60 bg-clinical-50/50 dark:bg-clinical-700/10 px-4 py-4">
-        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI 3.5</div>
+        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI 3.6 + FLASH-LITE</div>
       </div>
 
       {generating && generationProgress && (
         <div className="mt-4 rounded-lg border border-ink-200/70 dark:border-ink-800 bg-white/60 dark:bg-ink-950/30 px-3.5 py-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="font-medium text-ink-800 dark:text-paper">
-              {generationProgress.stage === "retrying"
-                ? `Reconectando à IA · tentativa ${generationProgress.retryAttempt ?? 2}`
-                : generationProgress.stage === "validating"
-                  ? "Revisando casos clínicos"
-                  : generationProgress.stage === "refill"
-                    ? `Completando seleção · rodada ${generationProgress.refillRound ?? 1}`
-                    : generationProgress.currentType === "clinical_case"
-                      ? "Construindo casos clínicos"
-                      : generationProgress.currentType === "cloze"
-                        ? "Gerando cards Cloze"
-                        : "Gerando cards básicos"}
+              {generationProgress.label
+                ? generationProgress.label
+                : generationProgress.stage === "retrying"
+                  ? `Aguardando a IA · tentativa ${generationProgress.retryAttempt ?? 2}`
+                  : generationProgress.stage === "validating"
+                    ? "Revisando casos clínicos"
+                    : generationProgress.stage === "refill"
+                      ? `Completando seleção · rodada ${generationProgress.refillRound ?? 1}`
+                      : generationProgress.currentType === "clinical_case"
+                        ? "Construindo casos clínicos"
+                        : generationProgress.currentType === "cloze"
+                          ? "Gerando cards Cloze"
+                          : "Gerando cards básicos"}
             </span>
             <span className="source-tab text-clinical-600 dark:text-clinical-300">
               {generationProgress.generatedCards}/{generationProgress.targetCards} CARDS
@@ -325,7 +327,7 @@ export default function CreateConfigure() {
               style={{ width: `${Math.max(6, Math.min(100, (generationProgress.generatedCards / generationProgress.targetCards) * 100))}%` }}
             />
           </div>
-          <p className="text-xs text-ink-400 mt-2">O Fichário preserva os cards aprovados, evita repetições e tenta completar a seleção automaticamente.</p>
+          <p className="text-xs text-ink-400 mt-2">A geração agora continua em segundo plano e preserva o progresso mesmo quando uma chamada da IA demora mais.</p>
         </div>
       )}
 
@@ -343,17 +345,19 @@ export default function CreateConfigure() {
         className="mt-6 w-full rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-3 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {generating
-          ? generationProgress
-            ? generationProgress.stage === "retrying"
-              ? "Tentando novamente automaticamente..."
-              : generationProgress.stage === "validating"
-                ? "Revisando casos clínicos..."
-                : generationProgress.stage === "refill"
-                  ? `Completando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
-                  : generationProgress.currentType === "clinical_case"
-                    ? "Construindo casos clínicos..."
-                    : `Gerando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
-            : "Preparando geração..."
+          ? generationProgress?.label
+            ? `${generationProgress.label}...`
+            : generationProgress
+              ? generationProgress.stage === "retrying"
+                ? "Aguardando a IA e tentando novamente..."
+                : generationProgress.stage === "validating"
+                  ? "Revisando casos clínicos..."
+                  : generationProgress.stage === "refill"
+                    ? `Completando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
+                    : generationProgress.currentType === "clinical_case"
+                      ? "Construindo casos clínicos..."
+                      : `Gerando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
+              : "Preparando geração..."
           : `Gerar ${cardCount} flashcards`}
       </button>
 

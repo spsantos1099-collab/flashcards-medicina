@@ -109,7 +109,7 @@ function sourceBlock(input) {
     .join("\n\n");
 }
 
-function buildGenerationPrompt(input) {
+export function buildGenerationPrompt(input) {
   const source = sourceBlock(input);
   const type = input.options.requestedType;
   const priorities = input.options.priorities.length
@@ -214,7 +214,7 @@ ${source}
 </documento>`;
 }
 
-function buildClinicalValidatorPrompt(input, candidates) {
+export function buildClinicalValidatorPrompt(input, candidates) {
   const source = sourceBlock(input);
   const compactCandidates = candidates.map((card, index) => ({
     index,
@@ -259,7 +259,7 @@ ${source}
 </DOCUMENTO>`;
 }
 
-function normalizeForSourceCheck(value) {
+export function normalizeForSourceCheck(value) {
   return String(value || "")
     .normalize("NFKD")
     .replace(/\p{M}+/gu, "")
@@ -429,7 +429,7 @@ function setSimilarity(a, b) {
   return intersection / new Set([...A, ...B]).size;
 }
 
-function cardsAreSemanticDuplicates(a, b) {
+export function cardsAreSemanticDuplicates(a, b) {
   const objectiveSimilarity = setSimilarity(a.learningObjective, b.learningObjective);
   if (objectiveSimilarity >= 0.72) return true;
   const questionSimilarity = setSimilarity(a.question, b.question);
@@ -462,7 +462,7 @@ function passesClozeQualityGuard(card) {
   return true;
 }
 
-function sanitizeCards(cards, input) {
+export function sanitizeCards(cards, input) {
   const accepted = [];
   const requestedType = input.options.requestedType;
 
@@ -498,7 +498,7 @@ function sanitizeCards(cards, input) {
   return accepted;
 }
 
-function extractGeminiText(data) {
+export function extractGeminiText(data) {
   if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
   if (Array.isArray(data?.steps)) {
     const text = data.steps
@@ -545,7 +545,7 @@ function parseJson(text) {
   }
 }
 
-function parseModelCards(text) {
+export function parseModelCards(text) {
   const parsed = parseJson(text);
   if (Array.isArray(parsed)) return parsed;
   if (Array.isArray(parsed?.cards)) return parsed.cards;
@@ -553,7 +553,7 @@ function parseModelCards(text) {
   return null;
 }
 
-function parseValidationResults(text, expectedCount) {
+export function parseValidationResults(text, expectedCount) {
   const parsed = parseJson(text);
   const results = Array.isArray(parsed?.results) ? parsed.results : [];
   const byIndex = new Map();
@@ -570,7 +570,7 @@ function parseValidationResults(text, expectedCount) {
   return Array.from({ length: expectedCount }, (_, index) => byIndex.get(index));
 }
 
-function providerRetryAfterMs(response, errorText) {
+export function providerRetryAfterMs(response, errorText) {
   const header = response.headers.get("retry-after");
   if (header) {
     const seconds = Number(header);
@@ -590,7 +590,7 @@ function providerRetryAfterMs(response, errorText) {
   return undefined;
 }
 
-async function callGemini({ apiKey, model, prompt, thinkingLevel, timeoutMs }) {
+export async function callGemini({ apiKey, model, prompt, thinkingLevel, timeoutMs }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
