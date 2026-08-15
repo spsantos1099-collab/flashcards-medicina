@@ -261,13 +261,7 @@ export default function CreateConfigure() {
       </div>
 
       <div className="rounded-card border border-clinical-300 dark:border-clinical-700/60 bg-clinical-50/50 dark:bg-clinical-700/10 px-4 py-4">
-        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI</div>
-        <p className="text-sm text-ink-500 dark:text-ink-200 mt-1">
-          O Fichário divide o material em lotes menores antes de chamar a IA. Isso reduz o tempo de espera de cada requisição e mantém a referência de página de cada card. A chave da IA nunca fica exposta no navegador e o conteúdo do documento não é salvo no Firebase.
-        </p>
-        <p className="text-xs text-ink-400 mt-2">
-          Importante: no nível gratuito da Gemini API, o Google informa que os dados podem ser usados para melhorar seus produtos. Não envie materiais com dados identificáveis de pacientes.
-        </p>
+        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI 3.5 FLASH-LITE</div>
       </div>
 
       {generating && generationProgress && (

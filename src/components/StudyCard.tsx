@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Flashcard } from "../types";
+import ClozeText from "./ClozeText";
 
 interface StudyCardProps {
   card: Flashcard;
@@ -22,7 +23,7 @@ export default function StudyCard({ card }: StudyCardProps) {
 
         <div className="px-6 py-8 min-h-[9rem] flex items-center">
           <p className="font-display text-xl leading-relaxed text-ink-900 dark:text-paper">
-            {card.question}
+            <ClozeText text={card.question} revealed={revealed} />
           </p>
         </div>
 
