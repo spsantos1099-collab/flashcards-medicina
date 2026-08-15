@@ -48,7 +48,7 @@ export default function CreateConfigure() {
     setGenerationMeta,
   } = useCreateFlow();
   const [amount, setAmount] = useState<AmountMode>("balanced");
-  const [customCount, setCustomCount] = useState(15);
+  const [customCount, setCustomCount] = useState<number | "">(15);
   const [types, setTypes] = useState<CardType[]>(["basic", "cloze"]);
   const [priorities, setPriorities] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -58,7 +58,8 @@ export default function CreateConfigure() {
 
   const deck = decks.find((item) => item.id === targetDeckId);
   const selectedAmount = useMemo(() => AMOUNTS.find((item) => item.id === amount), [amount]);
-  const cardCount = amount === "custom" ? customCount : selectedAmount?.count ?? 15;
+  const normalizedCustomCount = customCount === "" ? 3 : Math.max(3, Math.min(40, customCount));
+  const cardCount = amount === "custom" ? normalizedCustomCount : selectedAmount?.count ?? 15;
 
   const toggleType = (type: CardType) => {
     setTypes((current) => current.includes(type)
@@ -227,15 +228,48 @@ export default function CreateConfigure() {
           <label htmlFor="custom-card-count" className="block text-sm font-medium text-ink-700 dark:text-ink-100 mb-2">
             Quantos cards? <span className="text-ink-400 font-normal">(3 a 40)</span>
           </label>
-          <input
-            id="custom-card-count"
-            type="number"
-            min={3}
-            max={40}
-            value={customCount}
-            onChange={(event) => setCustomCount(Math.max(3, Math.min(40, Number(event.target.value) || 3)))}
-            className="w-32 rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-3.5 py-2.5 text-sm outline-none focus:border-clinical-500"
-          />
+          <div className="inline-flex items-stretch overflow-hidden rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 focus-within:border-clinical-500">
+            <button
+              type="button"
+              aria-label="Diminuir quantidade de cards"
+              onClick={() => setCustomCount((current) => Math.max(3, (current === "" ? 3 : current) - 1))}
+              className="w-11 text-xl leading-none text-ink-600 dark:text-ink-200 hover:bg-ink-50 dark:hover:bg-ink-800 active:bg-ink-100 dark:active:bg-ink-700"
+            >
+              −
+            </button>
+            <input
+              id="custom-card-count"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              value={customCount}
+              onFocus={(event) => event.currentTarget.select()}
+              onChange={(event) => {
+                const digitsOnly = event.target.value.replace(/\D/g, "");
+                if (digitsOnly === "") {
+                  setCustomCount("");
+                  return;
+                }
+
+                setCustomCount(Math.min(40, Number(digitsOnly)));
+              }}
+              onBlur={() => {
+                if (customCount === "" || customCount < 3) setCustomCount(3);
+              }}
+              aria-label="Quantidade personalizada de flashcards"
+              className="w-20 border-x border-ink-200 dark:border-ink-700 bg-transparent px-2 py-2.5 text-center text-base font-medium outline-none"
+            />
+            <button
+              type="button"
+              aria-label="Aumentar quantidade de cards"
+              onClick={() => setCustomCount((current) => Math.min(40, (current === "" ? 3 : current) + 1))}
+              className="w-11 text-xl leading-none text-ink-600 dark:text-ink-200 hover:bg-ink-50 dark:hover:bg-ink-800 active:bg-ink-100 dark:active:bg-ink-700"
+            >
+              +
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-ink-400">Use − e + ou toque no número e digite de 3 a 40.</p>
         </div>
       )}
       {amount !== "custom" && <div className="mb-8" />}
