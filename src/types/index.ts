@@ -134,6 +134,23 @@ export interface ExtractedDocument {
   extractedAt: string;
 }
 
+
+export interface GenerationOptions {
+  amountMode: "essential" | "balanced" | "detailed" | "custom";
+  cardCount: number;
+  cardTypes: CardType[];
+  priorities: string[];
+}
+
+export interface GenerationMeta {
+  provider: "gemini";
+  model: string;
+  requestedCount: number;
+  returnedCount: number;
+  generatedAt: string;
+  documentName: string;
+}
+
 export interface ReviewRecord {
   id: string;
   cardId: string;

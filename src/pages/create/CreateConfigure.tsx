@@ -1,17 +1,26 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCreateFlow } from "../../contexts/CreateFlowContext";
 import { useDecks } from "../../hooks/useDecks";
+import { AIGenerationError, generateFlashcardsFromDocument } from "../../services/ai/generateFlashcards";
+import type { CardType, GenerationOptions } from "../../types";
 
 const AMOUNTS = [
-  { id: "essential", label: "Essencial", description: "Somente conceitos de maior importância." },
-  { id: "balanced", label: "Equilibrada", description: "Boa cobertura sem excesso de cards." },
-  { id: "detailed", label: "Detalhada", description: "Cobertura extensa do documento." },
-  { id: "custom", label: "Personalizada", description: "Você escolhe aproximadamente quantos cards." },
+  { id: "essential", label: "Essencial", description: "Somente conceitos de maior importância.", count: 8 },
+  { id: "balanced", label: "Equilibrada", description: "Boa cobertura sem excesso de cards.", count: 15 },
+  { id: "detailed", label: "Detalhada", description: "Cobertura extensa do documento.", count: 24 },
+  { id: "custom", label: "Personalizada", description: "Você escolhe aproximadamente quantos cards.", count: 15 },
+] as const;
+
+type AmountMode = (typeof AMOUNTS)[number]["id"];
+
+const CARD_TYPES: Array<{ id: CardType; label: string }> = [
+  { id: "basic", label: "Básico" },
+  { id: "cloze", label: "Cloze" },
+  { id: "clinical_case", label: "Caso clínico" },
 ];
 
-const CARD_TYPES = ["Básico", "Cloze", "Caso clínico"];
 const PRIORITIES = [
   "Conceitos fundamentais",
   "Diagnóstico",
@@ -26,18 +35,77 @@ function number(value: number) {
 }
 
 export default function CreateConfigure() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { decks } = useDecks(user?.uid);
-  const { file, targetDeckId, documentRecord, extractedDocument } = useCreateFlow();
-  const [amount, setAmount] = useState("balanced");
-  const [types, setTypes] = useState<string[]>(["Básico", "Cloze"]);
+  const {
+    file,
+    targetDeckId,
+    documentRecord,
+    extractedDocument,
+    setGeneratedCards,
+    setGenerationMeta,
+  } = useCreateFlow();
+  const [amount, setAmount] = useState<AmountMode>("balanced");
+  const [customCount, setCustomCount] = useState(15);
+  const [types, setTypes] = useState<CardType[]>(["basic", "cloze"]);
   const [priorities, setPriorities] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const deck = decks.find((item) => item.id === targetDeckId);
+  const selectedAmount = useMemo(() => AMOUNTS.find((item) => item.id === amount), [amount]);
+  const cardCount = amount === "custom" ? customCount : selectedAmount?.count ?? 15;
 
-  const toggle = (list: string[], setList: (v: string[]) => void, item: string) => {
-    setList(list.includes(item) ? list.filter((i) => i !== item) : [...list, item]);
+  const toggleType = (type: CardType) => {
+    setTypes((current) => current.includes(type)
+      ? current.filter((item) => item !== type)
+      : [...current, type]);
+  };
+
+  const togglePriority = (priority: string) => {
+    setPriorities((current) => current.includes(priority)
+      ? current.filter((item) => item !== priority)
+      : [...current, priority]);
+  };
+
+  const handleGenerate = async () => {
+    if (!user || !deck || !extractedDocument || types.length === 0) return;
+
+    setGenerating(true);
+    setGenerationError(null);
+    setGeneratedCards([]);
+    setGenerationMeta(null);
+
+    const options: GenerationOptions = {
+      amountMode: amount,
+      cardCount,
+      cardTypes: types,
+      priorities,
+    };
+
+    try {
+      const result = await generateFlashcardsFromDocument({
+        user,
+        deck,
+        document: extractedDocument,
+        options,
+      });
+
+      setGeneratedCards(result.cards);
+      setGenerationMeta(result.meta);
+      navigate("/create/review");
+    } catch (error) {
+      console.error("Não foi possível gerar os flashcards.", error);
+      setGenerationError(
+        error instanceof AIGenerationError
+          ? error.message
+          : "Não foi possível gerar os flashcards agora. Tente novamente.",
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
   if (!file || !targetDeckId || !documentRecord || !extractedDocument) {
@@ -65,9 +133,7 @@ export default function CreateConfigure() {
   return (
     <div className="max-w-xl">
       <div className="source-tab text-clinical-600 dark:text-clinical-300 mb-2">ETAPA 2 · CONFIGURAÇÃO</div>
-      <h1 className="font-display text-2xl text-ink-900 dark:text-paper mb-1">
-        Configurar geração
-      </h1>
+      <h1 className="font-display text-2xl text-ink-900 dark:text-paper mb-1">Configurar geração</h1>
       <p className="text-ink-400 mb-1 break-words">{file.name}</p>
       {deck && <p className="text-sm text-ink-400 mb-6">Deck: {deck.specialty} · {deck.title}</p>}
 
@@ -84,9 +150,8 @@ export default function CreateConfigure() {
             LOCAL
           </div>
         </div>
-
         <p className="text-sm text-ink-500 dark:text-ink-200 mt-3">
-          O texto está somente na memória desta sessão. O Firebase guarda as métricas acima, mas não guarda o conteúdo do documento.
+          O Firebase guarda apenas as métricas acima; o conteúdo do documento não é salvo no banco.
         </p>
       </div>
 
@@ -127,13 +192,13 @@ export default function CreateConfigure() {
         <div className="source-tab text-clinical-600 dark:text-clinical-300">RASTREABILIDADE</div>
         <p className="text-sm text-ink-400 mt-1">
           {extractedDocument.extension === "pdf"
-            ? "As páginas foram preservadas separadamente. Na geração, cada card poderá apontar para a página do PDF usada como fonte."
-            : "O DOCX não possui paginação fixa confiável. Os cards citarão o documento e, quando possível, o trecho usado como fonte."}
+            ? "As páginas foram preservadas separadamente. Cada card gerado deverá apontar para a página e para um trecho do PDF usado como fonte."
+            : "O DOCX não possui paginação fixa confiável. Cada card citará o documento e um trecho usado como fonte."}
         </p>
       </div>
 
       <h2 className="font-display text-lg text-ink-900 dark:text-paper mb-3">Quantidade</h2>
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         {AMOUNTS.map((opt) => (
           <button
             key={opt.id}
@@ -147,16 +212,37 @@ export default function CreateConfigure() {
           >
             <div className="font-medium text-sm text-ink-900 dark:text-paper">{opt.label}</div>
             <div className="text-xs text-ink-400 mt-0.5">{opt.description}</div>
+            {opt.id !== "custom" && <div className="source-tab mt-2">≈ {opt.count} CARDS</div>}
           </button>
         ))}
       </div>
 
+      {amount === "custom" && (
+        <div className="mb-8">
+          <label htmlFor="custom-card-count" className="block text-sm font-medium text-ink-700 dark:text-ink-100 mb-2">
+            Quantos cards? <span className="text-ink-400 font-normal">(3 a 40)</span>
+          </label>
+          <input
+            id="custom-card-count"
+            type="number"
+            min={3}
+            max={40}
+            value={customCount}
+            onChange={(event) => setCustomCount(Math.max(3, Math.min(40, Number(event.target.value) || 3)))}
+            className="w-32 rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-3.5 py-2.5 text-sm outline-none focus:border-clinical-500"
+          />
+        </div>
+      )}
+      {amount !== "custom" && <div className="mb-8" />}
+
       <h2 className="font-display text-lg text-ink-900 dark:text-paper mb-3">Tipos de card</h2>
-      <div className="flex flex-wrap gap-2 mb-8">
+      <div className="flex flex-wrap gap-2 mb-2">
         {CARD_TYPES.map((type) => (
-          <Chip key={type} label={type} active={types.includes(type)} onClick={() => toggle(types, setTypes, type)} />
+          <Chip key={type.id} label={type.label} active={types.includes(type.id)} onClick={() => toggleType(type.id)} />
         ))}
       </div>
+      {types.length === 0 && <p className="text-sm text-signal-600 dark:text-signal-300 mb-8">Selecione pelo menos um tipo de card.</p>}
+      {types.length > 0 && <div className="mb-8" />}
 
       <h2 className="font-display text-lg text-ink-900 dark:text-paper mb-3">Priorizar</h2>
       <div className="flex flex-wrap gap-2 mb-8">
@@ -165,24 +251,35 @@ export default function CreateConfigure() {
             key={priority}
             label={priority}
             active={priorities.includes(priority)}
-            onClick={() => toggle(priorities, setPriorities, priority)}
+            onClick={() => togglePriority(priority)}
           />
         ))}
       </div>
 
-      <div className="rounded-card border border-dashed border-ink-200 dark:border-ink-800 px-4 py-4">
-        <div className="source-tab text-clinical-600 dark:text-clinical-300">DOCUMENTO PRONTO PARA A IA</div>
-        <p className="text-sm text-ink-400 mt-1">
-          A leitura local já está funcionando. Na Fase 7, este conteúdo seguirá para uma Netlify Function segura, onde implementaremos a geração sem expor a chave da IA no navegador.
+      <div className="rounded-card border border-clinical-300 dark:border-clinical-700/60 bg-clinical-50/50 dark:bg-clinical-700/10 px-4 py-4">
+        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI</div>
+        <p className="text-sm text-ink-500 dark:text-ink-200 mt-1">
+          Ao clicar em gerar, o texto extraído será enviado pela Netlify Function ao Gemini para criar os flashcards. A chave da IA nunca fica exposta no navegador e o conteúdo não é salvo no Firebase.
+        </p>
+        <p className="text-xs text-ink-400 mt-2">
+          Importante: no nível gratuito da Gemini API, o Google informa que os dados podem ser usados para melhorar seus produtos. Não envie materiais com dados identificáveis de pacientes.
         </p>
       </div>
 
+      {generationError && (
+        <div className="mt-4 rounded-lg border border-signal-300/60 bg-signal-400/10 px-3.5 py-3 text-sm text-signal-700 dark:text-signal-300">
+          <div className="font-medium">A geração não foi concluída.</div>
+          <div className="mt-1">{generationError}</div>
+        </div>
+      )}
+
       <button
         type="button"
-        disabled
-        className="mt-6 w-full rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-3 text-sm font-medium opacity-40 cursor-not-allowed"
+        onClick={handleGenerate}
+        disabled={generating || !deck || types.length === 0}
+        className="mt-6 w-full rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-3 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Gerar flashcards · IA na próxima fase
+        {generating ? `Gerando aproximadamente ${cardCount} cards...` : `Gerar aproximadamente ${cardCount} flashcards`}
       </button>
 
       <Link

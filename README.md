@@ -152,3 +152,48 @@ digitalizado/imagem sem texto extraível.
 - O texto extraído fica somente no `CreateFlowContext` durante a sessão atual e **não é salvo no Firebase**.
 - O Realtime Database recebe apenas métricas da extração (`pageCount`, `pagesWithText`, `wordCount`, `characterCount`, status e horários).
 - PDFs sem texto selecionável mostram um aviso de provável documento digitalizado/imagem. OCR ainda não faz parte desta fase.
+
+---
+
+## Fase 7 — Netlify Function + IA real
+
+Esta versão conecta o fluxo de criação a uma Netlify Function real em
+`netlify/functions/generate-flashcards.mjs`.
+
+Fluxo:
+
+1. O navegador extrai o texto localmente (Fase 6).
+2. Ao clicar em **Gerar**, o frontend obtém o Firebase ID token da sessão.
+3. A Netlify Function valida a sessão antes de usar a cota da IA.
+4. A Function lê `GEMINI_API_KEY` somente no servidor.
+5. O documento é enviado ao Gemini com uma instrução rígida: usar apenas o
+   conteúdo fornecido, sem completar com conhecimento externo.
+6. A resposta volta em JSON estruturado e cada card inclui página/trecho-fonte.
+7. Os cards ficam apenas na memória da sessão e aparecem em `/create/review`.
+   Eles ainda não são persistidos no Firebase nesta fase.
+
+### Modelo padrão
+
+`gemini-2.5-flash`
+
+Pode ser trocado futuramente pela variável `GEMINI_MODEL`, sem alterar o
+frontend. A camada `src/services/ai/` também foi separada para facilitar a troca
+de provedor.
+
+### Privacidade
+
+O arquivo original não é enviado ao Firebase Storage e o texto extraído não é
+salvo no Realtime Database. Porém, ao gerar os cards, o **texto extraído é
+transmitido ao Gemini** através da Netlify Function. Não usar materiais com dados
+identificáveis de pacientes no nível gratuito da API.
+
+### Limite temporário desta fase
+
+Para manter a primeira integração simples e segura, a geração aceita até
+120.000 caracteres por documento. Documentos maiores receberão uma mensagem
+amigável. O processamento em blocos entra na evolução seguinte.
+
+### Variável obrigatória na Netlify
+
+Crie `GEMINI_API_KEY` em **Project configuration > Environment variables**. Ela
+não deve ter prefixo `VITE_`, porque precisa permanecer invisível ao navegador.

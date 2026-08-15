@@ -99,3 +99,13 @@ Em `documents/{uid}/{documentId}`, além dos metadados do arquivo, a extração 
 - `extractedTextStored`: sempre `false`
 
 O texto extraído e o conteúdo página a página **não são persistidos no Realtime Database**.
+
+## Fase 7 — geração por IA
+
+A Fase 7 **não grava os cards gerados no Realtime Database**. O resultado da IA
+fica somente no `CreateFlowContext` até a tela de revisão. A persistência em
+`cards/{uid}/{cardId}` só será habilitada depois da validação, edição e aprovação.
+
+O texto do PDF/DOCX também continua fora do Realtime Database. Para gerar os
+cards, ele é enviado temporariamente à Netlify Function e, de lá, ao provedor de
+IA. A chave da IA existe somente como variável de ambiente da Netlify.
