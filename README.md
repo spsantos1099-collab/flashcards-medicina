@@ -197,3 +197,11 @@ amigável. O processamento em blocos entra na evolução seguinte.
 
 Crie `GEMINI_API_KEY` em **Project configuration > Environment variables**. Ela
 não deve ter prefixo `VITE_`, porque precisa permanecer invisível ao navegador.
+
+## Fase 7.2 — compatibilidade Gemini
+
+A Netlify Function usa a Interactions API com o payload mínimo documentado (`model`, `input` e `store: false`).
+O formato dos flashcards é exigido pelo prompt e validado no servidor antes de chegar ao frontend.
+Esta abordagem evita depender de configurações opcionais de schema/generation que podem variar entre revisões da API.
+
+A validação de rastreabilidade continua obrigatória: para PDF, o trecho citado precisa ser localizado no texto extraído de uma página real. Se a IA informar a página errada, o backend tenta localizar o trecho nas páginas e corrige a referência; se o trecho não existir no documento, o card é descartado.
