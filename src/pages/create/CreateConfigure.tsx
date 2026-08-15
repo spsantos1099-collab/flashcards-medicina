@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCreateFlow } from "../../contexts/CreateFlowContext";
 import { useDecks } from "../../hooks/useDecks";
-import { AIGenerationError, generateFlashcardsFromDocument } from "../../services/ai/generateFlashcards";
+import { AIGenerationError, generateFlashcardsFromDocument, type GenerationProgress } from "../../services/ai/generateFlashcards";
 import type { CardType, GenerationOptions } from "../../types";
 
 const AMOUNTS = [
@@ -52,6 +52,7 @@ export default function CreateConfigure() {
   const [priorities, setPriorities] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
   const deck = decks.find((item) => item.id === targetDeckId);
@@ -75,6 +76,7 @@ export default function CreateConfigure() {
 
     setGenerating(true);
     setGenerationError(null);
+    setGenerationProgress(null);
     setGeneratedCards([]);
     setGenerationMeta(null);
 
@@ -91,6 +93,7 @@ export default function CreateConfigure() {
         deck,
         document: extractedDocument,
         options,
+        onProgress: setGenerationProgress,
       });
 
       setGeneratedCards(result.cards);
@@ -105,6 +108,7 @@ export default function CreateConfigure() {
       );
     } finally {
       setGenerating(false);
+      setGenerationProgress(null);
     }
   };
 
@@ -259,12 +263,32 @@ export default function CreateConfigure() {
       <div className="rounded-card border border-clinical-300 dark:border-clinical-700/60 bg-clinical-50/50 dark:bg-clinical-700/10 px-4 py-4">
         <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI</div>
         <p className="text-sm text-ink-500 dark:text-ink-200 mt-1">
-          Ao clicar em gerar, o texto extraído será enviado pela Netlify Function ao Gemini para criar os flashcards. A chave da IA nunca fica exposta no navegador e o conteúdo não é salvo no Firebase.
+          O Fichário divide o material em lotes menores antes de chamar a IA. Isso reduz o tempo de espera de cada requisição e mantém a referência de página de cada card. A chave da IA nunca fica exposta no navegador e o conteúdo do documento não é salvo no Firebase.
         </p>
         <p className="text-xs text-ink-400 mt-2">
           Importante: no nível gratuito da Gemini API, o Google informa que os dados podem ser usados para melhorar seus produtos. Não envie materiais com dados identificáveis de pacientes.
         </p>
       </div>
+
+      {generating && generationProgress && (
+        <div className="mt-4 rounded-lg border border-ink-200/70 dark:border-ink-800 bg-white/60 dark:bg-ink-950/30 px-3.5 py-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium text-ink-800 dark:text-paper">
+              Gerando lote {Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de {generationProgress.totalBatches}
+            </span>
+            <span className="source-tab text-clinical-600 dark:text-clinical-300">
+              {generationProgress.generatedCards} CARDS
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+            <div
+              className="h-full bg-clinical-500 transition-all"
+              style={{ width: `${Math.max(6, (generationProgress.completedBatches / generationProgress.totalBatches) * 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-ink-400 mt-2">Aguarde nesta página enquanto os trechos são processados.</p>
+        </div>
+      )}
 
       {generationError && (
         <div className="mt-4 rounded-lg border border-signal-300/60 bg-signal-400/10 px-3.5 py-3 text-sm text-signal-700 dark:text-signal-300">
@@ -279,7 +303,11 @@ export default function CreateConfigure() {
         disabled={generating || !deck || types.length === 0}
         className="mt-6 w-full rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-3 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {generating ? `Gerando aproximadamente ${cardCount} cards...` : `Gerar aproximadamente ${cardCount} flashcards`}
+        {generating
+          ? generationProgress
+            ? `Processando lote ${Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de ${generationProgress.totalBatches}...`
+            : "Preparando geração..."
+          : `Gerar aproximadamente ${cardCount} flashcards`}
       </button>
 
       <Link

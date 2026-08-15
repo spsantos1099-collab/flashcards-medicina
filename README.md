@@ -164,44 +164,40 @@ Fluxo:
 
 1. O navegador extrai o texto localmente (Fase 6).
 2. Ao clicar em **Gerar**, o frontend obtém o Firebase ID token da sessão.
-3. A Netlify Function valida a sessão antes de usar a cota da IA.
-4. A Function lê `GEMINI_API_KEY` somente no servidor.
-5. O documento é enviado ao Gemini com uma instrução rígida: usar apenas o
-   conteúdo fornecido, sem completar com conhecimento externo.
-6. A resposta volta em JSON estruturado e cada card inclui página/trecho-fonte.
-7. Os cards ficam apenas na memória da sessão e aparecem em `/create/review`.
-   Eles ainda não são persistidos no Firebase nesta fase.
+3. O Fichário divide o conteúdo em lotes pequenos para evitar timeouts e preservar a cobertura do documento.
+4. Cada lote chama a Netlify Function, que valida a sessão antes de usar a cota da IA.
+5. A Function lê `GEMINI_API_KEY` somente no servidor.
+6. O Gemini recebe instrução rígida para usar apenas o conteúdo fornecido, sem completar com conhecimento externo.
+7. A resposta é validada no servidor e cada card precisa ter página/trecho-fonte verificável.
+8. O frontend agrega os lotes, remove perguntas duplicadas e mostra os cards em `/create/review`.
+9. Os cards ainda não são persistidos definitivamente no Firebase nesta fase.
 
-### Modelo padrão
+### Modelo usado para flashcards
 
-`gemini-3.6-flash`
-
-Pode ser trocado futuramente pela variável `GEMINI_MODEL`, sem alterar o
-frontend. A camada `src/services/ai/` também foi separada para facilitar a troca
-de provedor.
+O gerador usa por padrão `gemini-3.5-flash-lite`, escolhido por baixa latência e adequação a extração/processamento de documentos.
+A variável antiga `GEMINI_MODEL` pode continuar cadastrada na Netlify, mas não é usada por este gerador. Uma troca futura específica pode ser feita com `GEMINI_FLASHCARD_MODEL`.
 
 ### Privacidade
 
 O arquivo original não é enviado ao Firebase Storage e o texto extraído não é
-salvo no Realtime Database. Porém, ao gerar os cards, o **texto extraído é
-transmitido ao Gemini** através da Netlify Function. Não usar materiais com dados
+salvo no Realtime Database. Porém, ao gerar os cards, os trechos necessários são
+transmitidos ao Gemini através da Netlify Function. Não usar materiais com dados
 identificáveis de pacientes no nível gratuito da API.
 
 ### Limite temporário desta fase
 
-Para manter a primeira integração simples e segura, a geração aceita até
-120.000 caracteres por documento. Documentos maiores receberão uma mensagem
-amigável. O processamento em blocos entra na evolução seguinte.
+O documento pode ter até 120.000 caracteres. Internamente, ele é quebrado em lotes menores antes das chamadas à IA. Isso evita depender de uma única requisição longa e já prepara a arquitetura para materiais maiores.
 
 ### Variável obrigatória na Netlify
 
 Crie `GEMINI_API_KEY` em **Project configuration > Environment variables**. Ela
 não deve ter prefixo `VITE_`, porque precisa permanecer invisível ao navegador.
 
-## Fase 7.2 — compatibilidade Gemini
+## Fase 7.3 — geração em lotes e proteção contra timeout
 
-A Netlify Function usa a Interactions API com o payload mínimo documentado (`model`, `input` e `store: false`).
-O formato dos flashcards é exigido pelo prompt e validado no servidor antes de chegar ao frontend.
-Esta abordagem evita depender de configurações opcionais de schema/generation que podem variar entre revisões da API.
+A geração não envia mais 15–40 cards em uma única requisição. O frontend divide o documento em trechos e solicita no máximo quatro cards por lote, processando os lotes em sequência e exibindo progresso na interface.
 
-A validação de rastreabilidade continua obrigatória: para PDF, o trecho citado precisa ser localizado no texto extraído de uma página real. Se a IA informar a página errada, o backend tenta localizar o trecho nas páginas e corrige a referência; se o trecho não existir no documento, o card é descartado.
+A Netlify Function também limita cada chamada ao Gemini a 24 segundos. Se a IA não responder nesse intervalo, a aplicação recebe um erro explícito em vez de a Function terminar silenciosamente. O Gemini é chamado com `thinking_level: "minimal"` para reduzir a latência.
+
+A validação de rastreabilidade continua obrigatória: para PDF, o trecho citado precisa ser localizado literalmente no texto extraído de uma página real. Se a IA informar a página errada, o backend tenta localizar o trecho nas páginas do lote e corrige a referência; se o trecho não existir no documento, o card é descartado.
+
