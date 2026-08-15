@@ -9,6 +9,12 @@ export type ReviewRating = "again" | "hard" | "good" | "easy";
 export type CreationMode = "upload" | "research" | "manual";
 export type SourceKind = "upload" | "guideline" | "article" | "web";
 export type SourceVerificationStatus = "user_material" | "verified" | "pending";
+export type DocumentExtension = "pdf" | "docx";
+export type ExtractionIssue =
+  | "no_extractable_text"
+  | "password_protected"
+  | "invalid_document"
+  | "unknown";
 
 export interface UserProfile {
   uid: string;
@@ -86,14 +92,46 @@ export interface DocumentRecord {
   id: string;
   deckId: string;
   name: string;
-  extension: "pdf" | "docx";
+  extension: DocumentExtension;
   mimeType: string;
   sizeBytes?: number;
   extractionStatus: "pending" | "processing" | "ready" | "error";
+  extractionIssue?: ExtractionIssue;
+  pageCount?: number;
+  pagesWithText?: number;
+  characterCount?: number;
+  wordCount?: number;
+  warningCount?: number;
+  extractedAt?: string;
   storageMode: "browser_only";
-  extractedTextStored: boolean;
+  extractedTextStored: false;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Página extraída de um PDF. Mantida somente na memória do navegador. */
+export interface ExtractedPage {
+  pageNumber: number;
+  text: string;
+  characterCount: number;
+}
+
+/**
+ * Conteúdo extraído localmente. Nunca é persistido no Realtime Database.
+ * Na Fase 7, este objeto será enviado à Netlify Function em trechos controlados.
+ */
+export interface ExtractedDocument {
+  documentId: string;
+  name: string;
+  extension: DocumentExtension;
+  fullText: string;
+  pages: ExtractedPage[];
+  pageCount?: number;
+  pagesWithText?: number;
+  characterCount: number;
+  wordCount: number;
+  warnings: string[];
+  extractedAt: string;
 }
 
 export interface ReviewRecord {

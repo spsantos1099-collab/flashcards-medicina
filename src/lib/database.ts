@@ -1,7 +1,7 @@
 import type { User } from "firebase/auth";
 import { get, push, ref, remove, set, update } from "firebase/database";
 import { database } from "./firebase";
-import type { Deck, DocumentRecord, UserProfile } from "../types";
+import type { Deck, DocumentRecord, ExtractedDocument, ExtractionIssue, UserProfile } from "../types";
 
 export type UserDataCollection =
   | "decks"
@@ -205,3 +205,53 @@ export async function linkDocumentToDeck(
     updatedAt: isoNow(),
   });
 }
+
+/** Marca o início da extração local sem salvar nenhum conteúdo do documento. */
+export async function markDocumentExtractionProcessing(
+  uid: string,
+  documentId: string,
+): Promise<void> {
+  await update(ref(database, `documents/${uid}/${documentId}`), {
+    extractionStatus: "processing",
+    extractionIssue: null,
+    updatedAt: isoNow(),
+  });
+}
+
+/**
+ * Salva apenas métricas da extração. O texto e as páginas continuam somente
+ * na memória do navegador e nunca são gravados no Realtime Database.
+ */
+export async function markDocumentExtractionReady(
+  uid: string,
+  documentId: string,
+  extracted: ExtractedDocument,
+): Promise<void> {
+  await update(ref(database, `documents/${uid}/${documentId}`), {
+    extractionStatus: "ready",
+    extractionIssue: null,
+    pageCount: extracted.pageCount ?? null,
+    pagesWithText: extracted.pagesWithText ?? null,
+    characterCount: extracted.characterCount,
+    wordCount: extracted.wordCount,
+    warningCount: extracted.warnings.length,
+    extractedAt: extracted.extractedAt,
+    extractedTextStored: false,
+    updatedAt: isoNow(),
+  });
+}
+
+/** Registra somente o tipo da falha, sem conteúdo do arquivo nem mensagem técnica. */
+export async function markDocumentExtractionError(
+  uid: string,
+  documentId: string,
+  issue: ExtractionIssue,
+): Promise<void> {
+  await update(ref(database, `documents/${uid}/${documentId}`), {
+    extractionStatus: "error",
+    extractionIssue: issue,
+    extractedTextStored: false,
+    updatedAt: isoNow(),
+  });
+}
+

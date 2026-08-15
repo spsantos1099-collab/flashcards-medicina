@@ -83,3 +83,19 @@ A IA nunca é tratada como fonte. Todo card deverá apontar para uma ou mais fon
 ## Arquivos na Fase 5
 
 O Firebase Storage continua **fora do projeto**. Ao selecionar PDF/DOCX, o arquivo fica somente no navegador. O Realtime Database recebe apenas os metadados listados em `documents/{uid}/{documentId}`. O campo `extractedTextStored` permanece `false`; o texto extraído não será salvo no banco nesta fase.
+
+## Fase 6 — metadados de extração
+
+Em `documents/{uid}/{documentId}`, além dos metadados do arquivo, a extração local pode registrar:
+
+- `extractionStatus`: `pending | processing | ready | error`
+- `extractionIssue`: código de erro quando existir
+- `pageCount`: quantidade de páginas (PDF)
+- `pagesWithText`: páginas com texto extraível (PDF)
+- `characterCount`: quantidade aproximada de caracteres extraídos
+- `wordCount`: quantidade aproximada de palavras
+- `warningCount`: quantidade de avisos de leitura
+- `extractedAt`: horário em que a extração terminou
+- `extractedTextStored`: sempre `false`
+
+O texto extraído e o conteúdo página a página **não são persistidos no Realtime Database**.

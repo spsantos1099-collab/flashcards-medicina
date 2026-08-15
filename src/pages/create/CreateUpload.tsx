@@ -3,7 +3,17 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCreateFlow } from "../../contexts/CreateFlowContext";
 import { useDecks } from "../../hooks/useDecks";
-import { createDocumentRecord, linkDocumentToDeck } from "../../lib/database";
+import {
+  createDocumentRecord,
+  linkDocumentToDeck,
+  markDocumentExtractionError,
+  markDocumentExtractionProcessing,
+  markDocumentExtractionReady,
+} from "../../lib/database";
+import {
+  DocumentExtractionError,
+  extractDocument,
+} from "../../lib/documentExtraction";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ["pdf", "docx"];
@@ -48,12 +58,14 @@ export default function CreateUpload() {
     setFile,
     setTargetDeckId,
     setDocumentRecord,
+    setExtractedDocument,
   } = useCreateFlow();
 
   const [dragging, setDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [processingLabel, setProcessingLabel] = useState("Preparando documento...");
 
   useEffect(() => {
     const requestedDeckId = searchParams.get("deckId");
@@ -73,6 +85,7 @@ export default function CreateUpload() {
   const acceptFile = (nextFile: File) => {
     const error = validateFile(nextFile);
     setSaveError(null);
+    setExtractedDocument(null);
 
     if (error) {
       setFileError(error);
@@ -104,6 +117,7 @@ export default function CreateUpload() {
     setFileError(null);
     setSaveError(null);
     setDocumentRecord(null);
+    setExtractedDocument(null);
   };
 
   const handleContinue = async () => {
@@ -111,17 +125,42 @@ export default function CreateUpload() {
 
     setSaving(true);
     setSaveError(null);
+    setProcessingLabel("Preparando documento...");
+
+    let documentId: string | null = null;
 
     try {
       const record = await createDocumentRecord(user.uid, targetDeckId, file);
-      await linkDocumentToDeck(user.uid, targetDeckId, record);
+      documentId = record.id;
       setDocumentRecord(record);
+
+      await markDocumentExtractionProcessing(user.uid, record.id);
+      setProcessingLabel(file.name.toLowerCase().endsWith(".pdf") ? "Lendo páginas do PDF..." : "Lendo conteúdo do DOCX...");
+
+      const extracted = await extractDocument(file, record.id);
+      await markDocumentExtractionReady(user.uid, record.id, extracted);
+      await linkDocumentToDeck(user.uid, targetDeckId, record);
+
+      setExtractedDocument(extracted);
       navigate("/create/configure");
     } catch (error) {
       console.error("Não foi possível preparar o documento.", error);
-      setSaveError("Não foi possível preparar este documento agora. Tente novamente.");
+
+      const extractionError = error instanceof DocumentExtractionError ? error : null;
+      if (documentId && extractionError) {
+        try {
+          await markDocumentExtractionError(user.uid, documentId, extractionError.code);
+        } catch (databaseError) {
+          console.error("Não foi possível registrar a falha de extração.", databaseError);
+        }
+      }
+
+      setSaveError(
+        extractionError?.message ?? "Não foi possível preparar este documento agora. Tente novamente.",
+      );
     } finally {
       setSaving(false);
+      setProcessingLabel("Preparando documento...");
     }
   };
 
@@ -135,7 +174,7 @@ export default function CreateUpload() {
         Enviar material de estudo
       </h1>
       <p className="text-ink-400 mb-8 max-w-xl">
-        Selecione um PDF ou DOCX. O arquivo será processado no seu navegador, sem Firebase Storage.
+        Selecione um PDF ou DOCX. O conteúdo será lido no seu navegador, sem Firebase Storage.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3 mb-7">
@@ -224,11 +263,12 @@ export default function CreateUpload() {
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="font-medium text-clinical-600 dark:text-clinical-300"
+                  disabled={saving}
+                  className="font-medium text-clinical-600 dark:text-clinical-300 disabled:opacity-40"
                 >
                   Trocar
                 </button>
-                <button type="button" onClick={removeFile} className="text-signal-600 dark:text-signal-400">
+                <button type="button" onClick={removeFile} disabled={saving} className="text-signal-600 dark:text-signal-400 disabled:opacity-40">
                   Remover
                 </button>
               </div>
@@ -254,22 +294,27 @@ export default function CreateUpload() {
         </div>
       )}
 
+      {saveError && (
+        <div className="mt-3 rounded-lg border border-signal-300/60 bg-signal-400/10 px-3.5 py-3 text-sm text-signal-700 dark:text-signal-300">
+          <div className="font-medium">Não foi possível extrair o conteúdo.</div>
+          <div className="mt-1">{saveError}</div>
+        </div>
+      )}
+
       <div className="mt-5 rounded-card border border-ink-200/70 dark:border-ink-800 px-4 py-3.5">
         <div className="source-tab">PRIVACIDADE DO ARQUIVO</div>
         <p className="text-sm text-ink-400 mt-1">
-          O PDF/DOCX não é enviado para o Firebase nem fica armazenado na nuvem. Nesta fase, o banco salva apenas os metadados do documento para manter a rastreabilidade.
+          O arquivo e o texto extraído não são enviados para o Firebase. O banco recebe somente metadados e métricas de leitura para manter a rastreabilidade.
         </p>
       </div>
 
-      {saveError && <p className="mt-4 text-sm text-signal-600 dark:text-signal-400">{saveError}</p>}
-
       <button
         type="button"
-        disabled={!canContinue}
         onClick={handleContinue}
-        className="mt-6 w-full rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-3 text-sm font-medium hover:bg-ink-800 dark:hover:bg-clinical-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        disabled={!canContinue}
+        className="mt-6 w-full rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper py-3 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {saving ? "Preparando documento…" : "Continuar"}
+        {saving ? processingLabel : "Continuar"}
       </button>
     </div>
   );

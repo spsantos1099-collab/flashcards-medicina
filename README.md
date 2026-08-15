@@ -144,3 +144,11 @@ digitalizado/imagem sem texto extraível.
 - Firebase Authentication + Realtime Database
 - Netlify (deploy automático pelo GitHub)
 - Netlify Functions para a IA em fase posterior
+
+## Fase 6 — extração local de PDF/DOCX
+
+- PDF: `pdfjs-dist` lê o texto página a página no navegador, preservando o número da página para rastreabilidade futura.
+- DOCX: `mammoth` extrai o texto no navegador. DOCX não recebe número de página porque a paginação depende do renderizador/editor.
+- O texto extraído fica somente no `CreateFlowContext` durante a sessão atual e **não é salvo no Firebase**.
+- O Realtime Database recebe apenas métricas da extração (`pageCount`, `pagesWithText`, `wordCount`, `characterCount`, status e horários).
+- PDFs sem texto selecionável mostram um aviso de provável documento digitalizado/imagem. OCR ainda não faz parte desta fase.
