@@ -189,3 +189,7 @@ Não é necessário rodar `npm install`, `npm run dev` ou Git no computador loca
 Depois de validar o pipeline 7.7 com materiais reais, a próxima etapa é liberar
 **edição/aprovação individual e salvamento dos cards no Firebase**, antes do modo
 de estudo e repetição espaçada.
+
+## Fase 7.8.1 — refinamento de qualidade
+
+Esta entrega mantém a geração assíncrona da 7.8 e endurece os filtros pedagógicos: deduplicação entre tipos, Cloze mais atômico, dificuldade mais coerente, terminologia padronizada e revisão clínica mais rigorosa. Veja `FASE-7.8.1.md`.

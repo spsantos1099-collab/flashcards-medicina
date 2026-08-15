@@ -142,6 +142,9 @@ export function buildGenerationPrompt(input) {
 - Um caso pode conter informação neutra/irrelevante para parecer prova real, mas nunca um detalhe enganoso que exija conhecimento externo ao documento para ser descartado.
 - Se uma regra usa OU, basta uma condição verdadeira; não conclua “não” porque as outras condições estão ausentes. Se uma regra usa E/combinação obrigatória, inclua TODOS os critérios necessários antes de concluir elegibilidade.
 - Antes de responder, confira se a conclusão decorre logicamente dos dados decisivos do caso e das regras do documento.
+- A dificuldade precisa combinar com o raciocínio exigido. Se o objetivo for CALCULAR uma pontuação ou RECONHECER uma classe/estágio, NÃO entregue no enunciado os pontos parciais, a soma, a classe ou o rótulo que o aluno deveria derivar. Ex.: em um caso de Boston, forneça FC/achados/radiografia, mas não escreva “(2 pontos)”.
+- Se o objetivo for uma decisão POSTERIOR à classificação (ex.: conduta em um paciente já NYHA III), a classe pode ser fornecida porque ela é dado de entrada, não a resposta escondida.
+- Um caso hard deve exigir ao menos dois passos reais de raciocínio ou uma exceção/combinação explícita; não rotule como hard uma simples comparação com um único limiar.
 - evidences deve conter TODOS os trechos necessários para sustentar os dados decisivos e a regra usada na resposta (1 a 5 evidências). Background puramente narrativo não precisa de evidência.`
     : type === "cloze"
       ? `TIPO OBRIGATÓRIO: cloze. Gere SOMENTE cards Cloze.
@@ -150,6 +153,7 @@ export function buildGenerationPrompt(input) {
 - Não esconda palavras genéricas/banais (ex.: "aeróbico", "paciente", "tratamento") só para criar uma lacuna. A parte oculta deve ser exatamente o conhecimento que vale recuperar em prova.
 - Se uma frase contém uma escala com três ou mais categorias (ex.: improvável/possível/definitivo), NÃO esconda apenas duas e deixe a terceira visível. Prefira um card focado em uma única faixa ou reformule para um único objetivo atômico.
 - Não faça uma frase longa com muitos dados expostos e apenas um blank pouco informativo. O enunciado deve direcionar claramente para a informação oculta.
+- Não use Cloze para repetir um objetivo que já seria coberto por um card Básico/Caso clínico no mesmo deck.
 - evidences deve conter exatamente 1 evidência que sustente diretamente o card.`
       : `TIPO OBRIGATÓRIO: basic. Gere SOMENTE cards Básicos.
 - Faça pergunta direta com resposta curta e objetiva.
@@ -175,11 +179,16 @@ QUALIDADE — PADRÃO RESIDÊNCIA
 - Priorize conhecimentos que mudam decisão: diagnóstico, próxima conduta, indicação, contraindicação, limiar, dose, classificação, gravidade, encaminhamento, monitorização, exceção e segurança.
 - 1 card = 1 objetivo principal de recuperação.
 - Evite trivia, epidemiologia pouco acionável e detalhes periféricos quando houver conteúdo clínico mais valioso.
-- Evite duplicatas semânticas: mudar de Básico para Cloze não transforma o mesmo objetivo em um card novo.
-- learningObjective deve ser uma frase curta e canônica descrevendo exatamente o que o aluno precisa recuperar. Ex.: "Critérios de Boston — faixa de diagnóstico definitivo".
+- Evite duplicatas semânticas ENTRE TODOS OS TIPOS: mudar de Básico para Cloze ou para Caso clínico não transforma o mesmo objetivo de aprendizagem em um card novo.
+- learningObjective deve ser uma frase curta, canônica e independente do tipo do card. Use o padrão “tema específico — fato/decisão”. Se dois cards cobrariam o mesmo conhecimento, eles DEVEM receber o mesmo learningObjective e apenas um deve ser gerado. Ex.: “Framingham — regra diagnóstica” ou “Critérios de Boston — diagnóstico definitivo”.
+- Não concentre um deck curto em várias perguntas sobre a mesma regra quando existirem outros pontos importantes no documento.
 - Um card difícil deve ser difícil pela decisão/precisão, não por ser longo ou confuso.
-- Revise ortografia e terminologia antes de responder.
+- CALIBRAÇÃO: easy = recuperação direta de um fato explícito; medium = aplicação de uma regra ou combinação curta de informações; hard = dois ou mais passos reais de raciocínio, cálculo/classificação, exceção relevante ou múltiplos critérios explícitos. Um número isolado não torna o card difícil.
+- Revise ortografia e terminologia em português do Brasil antes de responder. Não deixe palavras em inglês escaparem para pergunta/resposta/explicação, salvo siglas ou nomes próprios inevitáveis.
+- Não intensifique a fonte: nunca escreva “contraindicação absoluta”, “obrigatório”, “sempre”, “nunca” ou equivalentes se o documento não usar/sustentar esse grau de certeza.
 - Preserve números, unidades, critérios, doses, classificações e conectores lógicos (E/OU) exatamente.
+- Preserve a distinção entre recomendações diferentes. Não funda duas condutas em um rótulo mais amplo: por exemplo, se a fonte separa restrição de líquidos e orientação de ingestão de sal, mantenha-as separadas na pergunta e na resposta.
+- Padronize apenas a apresentação, sem mudar o conteúdo: ICFEr/ICFEp, NT-proBNP, sacubitril/valsartana, NYHA, IECA, ARA II, TFG, FEVE e unidades como m² quando aplicável.
 
 ${typeRules}
 
@@ -243,6 +252,10 @@ Verifique TODOS os itens:
 8. A explicação não acrescenta conhecimento médico externo nem transforma background narrativo em regra médica.
 9. A lista evidences cobre os trechos necessários para auditar TODOS os dados decisivos e a regra que leva à resposta; background neutro não exige evidência.
 10. Informações neutras podem enriquecer o cenário, mas REJEITE detalhes enganosos que só possam ser descartados com conhecimento de fora do documento.
+11. A dificuldade é coerente com o raciocínio? Se o caso foi marcado hard, ele precisa exigir cálculo/classificação, combinação de critérios, exceção ou pelo menos dois passos. REJEITE um caso hard que apenas compare um valor a um único limiar.
+12. Se o objetivo do caso é calcular/reconhecer uma pontuação, classe ou estágio, o enunciado NÃO pode fornecer os pontos parciais, a soma ou a própria classe que deveria ser derivada. Se o objetivo é uma decisão posterior, a classe pode ser fornecida como dado de entrada.
+13. Pergunta, resposta e explicação devem estar em português do Brasil e não podem intensificar a fonte com qualificadores como “contraindicação absoluta” se isso não estiver sustentado nas evidências.
+14. A nomenclatura deve ser consistente (ex.: ICFEr, ICFEp, NT-proBNP, sacubitril/valsartana, m²), sem alterar os fatos da fonte.
 
 Exemplo de erro a REJEITAR: o documento diz “congestão persistente OU NYHA III-IV OU hiponatremia”, o caso é NYHA III e a resposta diz que não há indicação porque não há congestão/hiponatremia. Isso viola o OU.
 
@@ -341,6 +354,44 @@ function findSourcePage(sourceExcerpt, input, preferredPage = 0) {
   return bestScore >= 0.82 ? bestPage : 0;
 }
 
+
+function polishMedicalText(value) {
+  return cleanText(value, 1600)
+    .replace(/\bgout\b/gi, "gota")
+    .replace(/\besfreco\b/gi, "escore")
+    .replace(/\bICFER\b/gi, "ICFEr")
+    .replace(/\bICFEP\b/gi, "ICFEp")
+    .replace(/\bNT\s*[-–— ]?\s*ProBNP\b/gi, "NT-proBNP")
+    .replace(/\bsacubitril\s*[-–— ]\s*valsartana\b/gi, "sacubitril/valsartana")
+    .replace(/\bARA\s*[-–— ]?\s*II\b/gi, "ARA II")
+    .replace(/\bIECA\b/gi, "IECA")
+    .replace(/\bNYHA\b/gi, "NYHA")
+    .replace(/\bFEVE\b/gi, "FEVE")
+    .replace(/\bTFG\b/gi, "TFG")
+    .replace(/\bBNP\b/gi, "BNP")
+    .replace(/m2\b/gi, "m²")
+    .replace(/\s+%/g, "%")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function hasObviousLanguageLeak(card) {
+  const text = `${card.question} ${card.answer} ${card.explanation}`.toLocaleLowerCase("pt-BR");
+  return /\b(patient|treatment|contraindicated|guidelines?|heart failure|gout)\b/.test(text);
+}
+
+function evidenceText(card) {
+  return (card.evidences || []).map((item) => item.sourceExcerpt || "").join(" ");
+}
+
+function passesSourceQualifierGuard(card) {
+  const cardText = normalizeForSourceCheck(`${card.question} ${card.answer} ${card.explanation}`);
+  const sourceText = normalizeForSourceCheck(evidenceText(card));
+  // “absoluta” muda a força da recomendação. Só pode aparecer se a própria fonte sustentar esse qualificador.
+  if (/\babsolut\w*/.test(cardText) && !/\babsolut\w*/.test(sourceText)) return false;
+  return true;
+}
+
 function normalizeCardType(value) {
   const raw = String(value || "").trim().toLocaleLowerCase("pt-BR");
   if (["cloze", "lacuna"].includes(raw)) return "cloze";
@@ -412,35 +463,81 @@ function cleanClozeAnswer(answer, question) {
   return answerText;
 }
 
+const OBJECTIVE_STOPWORDS = new Set([
+  "criterio", "criterios", "regra", "regras", "paciente", "pacientes", "insuficiencia", "cardiaca",
+  "cardiaco", "cardiologia", "tratamento", "diagnostico", "diagnostica", "diagnosticos", "uso", "para",
+  "pela", "pelo", "com", "sem", "qual", "quais", "segundo", "conforme", "indicacao", "indicacoes",
+  "conduta", "classificacao", "valor", "valores", "ponto", "pontos", "recomendado", "recomendada",
+]);
+
 function conceptTokens(value) {
   return new Set(
     normalizeForSourceCheck(value)
       .split(" ")
-      .filter((token) => token.length >= 3),
+      .filter((token) => token.length >= 3 || /^\d/.test(token)),
   );
 }
 
-function setSimilarity(a, b) {
-  const A = conceptTokens(a);
-  const B = conceptTokens(b);
+function objectiveTokens(value) {
+  return new Set(
+    normalizeForSourceCheck(value)
+      .split(" ")
+      .map((token) => {
+        if (/^diagnost/.test(token)) return "diagnost";
+        if (/^contraindic/.test(token)) return "contraindic";
+        if (/^indic/.test(token)) return "indic";
+        if (/^class/.test(token)) return "class";
+        if (/^encaminh|^referenc/.test(token)) return "encaminh";
+        if (/^substitu/.test(token)) return "substitu";
+        return token;
+      })
+      .filter((token) => token.length >= 3 && !OBJECTIVE_STOPWORDS.has(token)),
+  );
+}
+
+function similarityFromSets(A, B) {
   if (!A.size || !B.size) return 0;
   let intersection = 0;
   for (const token of A) if (B.has(token)) intersection += 1;
   return intersection / new Set([...A, ...B]).size;
 }
 
+function setSimilarity(a, b) {
+  return similarityFromSets(conceptTokens(a), conceptTokens(b));
+}
+
+function objectiveSimilarity(a, b) {
+  return similarityFromSets(objectiveTokens(a), objectiveTokens(b));
+}
+
+function bestEvidenceSimilarity(a, b) {
+  let best = 0;
+  for (const ea of a.evidences || []) {
+    for (const eb of b.evidences || []) {
+      if (ea.sourcePage !== eb.sourcePage) continue;
+      best = Math.max(best, setSimilarity(ea.sourceExcerpt, eb.sourceExcerpt));
+    }
+  }
+  return best;
+}
+
 export function cardsAreSemanticDuplicates(a, b) {
-  const objectiveSimilarity = setSimilarity(a.learningObjective, b.learningObjective);
-  if (objectiveSimilarity >= 0.72) return true;
+  const objectiveSim = objectiveSimilarity(a.learningObjective, b.learningObjective);
+  if (objectiveSim >= 0.58) return true;
+
   const questionSimilarity = setSimilarity(a.question, b.question);
-  if (questionSimilarity >= 0.83) return true;
+  const answerSimilarity = setSimilarity(a.answer, b.answer);
+  const evidenceSimilarity = bestEvidenceSimilarity(a, b);
+
+  if (questionSimilarity >= 0.90 && (answerSimilarity >= 0.45 || objectiveSim >= 0.50)) return true;
+
+  // Mesmo fato escrito em formatos diferentes (ex.: Básico vs Cloze) costuma compartilhar
+  // resposta e evidência, ainda que o learningObjective venha redigido de outra forma.
+  if (evidenceSimilarity >= 0.82 && answerSimilarity >= 0.58) return true;
+  if (evidenceSimilarity >= 0.92 && objectiveSim >= 0.50) return true;
+
   const sameAnswer = normalizeForSourceCheck(a.answer) === normalizeForSourceCheck(b.answer);
-  const evidenceA = a.evidences?.[0];
-  const evidenceB = b.evidences?.[0];
-  const sameEvidence = evidenceA && evidenceB
-    && evidenceA.sourcePage === evidenceB.sourcePage
-    && setSimilarity(evidenceA.sourceExcerpt, evidenceB.sourceExcerpt) >= 0.9;
-  return Boolean(sameAnswer && sameEvidence && objectiveSimilarity >= 0.45);
+  return Boolean(sameAnswer && evidenceSimilarity >= 0.70);
 }
 
 function clozeValues(question) {
@@ -456,9 +553,19 @@ function passesClozeQualityGuard(card) {
   // Evita blanks quase sem conteúdo, mantendo classificações curtas como IV/II.
   if (values.some((value) => value.length === 1 && !/^[IVX]+$/i.test(value) && !/^\d$/.test(value))) return false;
 
+  const lowValueSingles = new Set(["aerobico", "paciente", "tratamento", "medicamento", "doenca"]);
+  if (values.some((value) => lowValueSingles.has(normalizeForSourceCheck(value)))) return false;
+
   // Duas lacunas devem representar um par coerente; respostas muito distintas e longas
   // tendem a indicar que o card juntou objetivos independentes.
   if (values.length === 2 && values.some((value) => value.length > 80)) return false;
+
+  // Evita escalas de 3+ categorias em que apenas parte das respostas é escondida e o resto
+  // fica visível, entregando o padrão (caso clássico: improvável/possível/definitivo).
+  const plain = String(card.question || "").replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g, "_____ ");
+  const relationCount = (plain.match(/\b(indica|corresponde|define|classifica)\b/gi) || []).length;
+  if (relationCount >= 3) return false;
+
   return true;
 }
 
@@ -469,18 +576,19 @@ export function sanitizeCards(cards, input) {
   for (const raw of Array.isArray(cards) ? cards : []) {
     if (!raw || typeof raw !== "object") continue;
     const type = normalizeCardType(raw.type);
-    const question = cleanText(raw.question ?? raw.front, 1100);
-    const answer = type === "cloze"
-      ? cleanClozeAnswer(raw.answer ?? raw.back, question)
-      : cleanText(raw.answer ?? raw.back, 1400);
+    const rawQuestion = cleanText(raw.question ?? raw.front, 1100);
+    const question = polishMedicalText(rawQuestion);
+    const answer = polishMedicalText(type === "cloze"
+      ? cleanClozeAnswer(raw.answer ?? raw.back, rawQuestion)
+      : cleanText(raw.answer ?? raw.back, 1400));
     const evidences = normalizeEvidences(raw, input);
     const card = {
       type,
-      learningObjective: cleanText(raw.learningObjective ?? raw.learning_objective ?? raw.objective, 220),
+      learningObjective: polishMedicalText(raw.learningObjective ?? raw.learning_objective ?? raw.objective),
       question,
       answer,
-      explanation: cleanText(raw.explanation ?? raw.rationale, 1400),
-      topic: cleanText(raw.topic ?? raw.subtopic, 160) || input.deck.topic || input.deck.title,
+      explanation: polishMedicalText(raw.explanation ?? raw.rationale),
+      topic: polishMedicalText(raw.topic ?? raw.subtopic) || polishMedicalText(input.deck.topic) || polishMedicalText(input.deck.title),
       tags: normalizeTags(raw.tags),
       difficulty: normalizeDifficulty(raw.difficulty),
       evidences,
@@ -490,6 +598,8 @@ export function sanitizeCards(cards, input) {
     if (!passesAtomicityGuard(card)) continue;
     if (type === "cloze" && (!/\{\{c\d+::.+?\}\}/.test(card.question) || !passesClozeQualityGuard(card))) continue;
     if (evidences.length === 0) continue;
+    if (hasObviousLanguageLeak(card)) continue;
+    if (!passesSourceQualifierGuard(card)) continue;
     if (accepted.some((existing) => cardsAreSemanticDuplicates(existing, card))) continue;
     accepted.push(card);
     if (accepted.length >= input.options.cardCount) break;
