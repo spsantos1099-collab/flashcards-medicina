@@ -52,6 +52,7 @@ export interface CardSource {
   pmid?: string;
   doi?: string;
   verificationStatus: SourceVerificationStatus;
+  supports?: string;
 }
 
 export interface Flashcard {
@@ -64,6 +65,7 @@ export interface Flashcard {
   topic: string;
   tags: string[];
   difficulty: Difficulty;
+  learningObjective?: string;
   sources: CardSource[];
   hasSourceConflict?: boolean;
   sourceConflictNote?: string;

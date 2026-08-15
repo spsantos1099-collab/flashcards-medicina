@@ -6,7 +6,7 @@ posterior, **Pesquisar por tema** (diretrizes, artigos e outras fontes médicas
 verificáveis). A IA nunca é tratada como fonte: ela transforma um contexto-fonte
 em cards e cada card guarda sua origem.
 
-## Estado atual — Fase 7.5
+## Estado atual — Fase 7.6
 
 Já estão funcionando:
 
@@ -18,60 +18,122 @@ Já estão funcionando:
 - extração de PDF página a página (`pdfjs-dist`) e DOCX (`mammoth`);
 - metadados da extração no Realtime Database sem salvar o texto do documento;
 - Netlify Function protegendo a chave `GEMINI_API_KEY`;
-- geração real de flashcards com Gemini em lotes pequenos para evitar timeout;
-- validação literal da página/trecho-fonte de cada card;
+- geração real em lotes pequenos, com recuperação automática de falhas transitórias;
 - cards Básico, Cloze e Caso clínico;
-- resposta e fonte ocultas até clicar em **Mostrar resposta**;
-- sintaxe técnica de Cloze escondida da interface.
+- resposta e fontes ocultas até clicar em **Mostrar resposta**;
+- sintaxe técnica de Cloze escondida da interface;
+- rastreabilidade por uma ou várias evidências do documento.
 
-### Qualidade da geração — Fase 7.5
+## Pipeline confiável de geração — Fase 7.6
 
-A geração agora é orientada para **internato, residência e provas**, e não apenas
-para extração de fatos. O prompt prioriza diagnóstico, conduta, indicações,
-contraindicações, limiares, doses, classificações, encaminhamento, exceções e
-segurança quando esses pontos existirem no material.
+A geração deixou de ser uma única chamada de IA. O fluxo agora é:
 
-Regras principais:
+```text
+PDF/DOCX
+  → geração por tipo de card
+  → verificação local das fontes
+  → deduplicação por objetivo de aprendizagem
+  → segundo revisor para casos clínicos
+  → reposição automática do que faltar
+  → tela de revisão
+```
+
+### Roteamento de modelos
+
+- **Básico e Cloze:** `gemini-3.5-flash-lite`, priorizando baixa latência;
+- **Caso clínico:** `gemini-3.5-flash`, para tarefas que exigem aplicação de critérios;
+- **Segundo revisor de caso clínico:** `gemini-3.5-flash`.
+
+As variáveis opcionais para trocar os modelos no futuro são:
+
+```text
+GEMINI_FLASHCARD_FAST_MODEL
+GEMINI_FLASHCARD_CLINICAL_MODEL
+GEMINI_FLASHCARD_VALIDATOR_MODEL
+```
+
+Se não existirem, os modelos acima são usados automaticamente.
+
+### Resiliência
+
+Erros transitórios (`408`, `429`, `5xx`, timeout e falha de rede) recebem novas
+tentativas automáticas com espera progressiva e jitter. Um lote que falha não
+apaga os cards já aprovados. O sistema continua com os demais lotes e tenta
+repor o que ficou faltando depois.
+
+Erros de configuração (`400`, `401`, `403`) não entram em loop de retry.
+
+### Casos clínicos
+
+Casos clínicos passam por duas etapas independentes:
+
+1. geração;
+2. revisão lógica por uma segunda chamada.
+
+O segundo revisor rejeita casos quando, por exemplo:
+
+- a resposta não decorre dos dados apresentados;
+- falta um critério obrigatório;
+- uma regra com **OU** foi tratada como **E** (ou o contrário);
+- a conclusão depende de informação médica externa ao documento;
+- há contradição entre enunciado, resposta e fonte;
+- as evidências não permitem auditar os dados decisivos do caso.
+
+Casos rejeitados não chegam à tela; entram na reposição automática.
+
+### Tipos escolhidos são respeitados
+
+A quantidade-alvo é dividida entre os tipos selecionados. Assim, se o usuário
+selecionar Básico + Cloze + Caso clínico para 15 cards, o Fichário tenta gerar
+5 de cada tipo. Selecionar somente Caso clínico faz o alvo inteiro ser dedicado
+a casos clínicos.
+
+### Deduplicação semântica
+
+Cada geração recebe um `learningObjective` canônico. O Fichário compara objetivo,
+pergunta, resposta e evidência para impedir que o mesmo conhecimento apareça
+como dois cards apenas porque um foi escrito como Básico e outro como Cloze.
+
+### Verificação de fonte tolerante a artefatos de PDF
+
+A origem continua obrigatória, mas a comparação normaliza artefatos típicos de
+extração, como:
+
+- palavras quebradas por hífen/fim de linha;
+- espaços e quebras de linha;
+- `m²` versus `m 2`;
+- caracteres Unicode equivalentes;
+- pontuação de layout.
+
+Isso reduz falsos descartes sem aceitar uma afirmação que não esteja realmente
+ancorada na página indicada.
+
+## Qualidade pedagógica
 
 - **1 card = 1 objetivo principal de recuperação**;
-- evitar respostas com listas longas quando os itens podem virar cards menores;
-- listas completas só permanecem juntas quando forem curtas, canônicas e valer a
-  pena memorizar como conjunto;
-- casos clínicos só podem usar dados sustentados pelo documento;
-- preservar literalmente números, unidades, doses, critérios e exceções;
+- priorizar diagnóstico, conduta, indicações, contraindicações, limiares, doses,
+  classificações, encaminhamento, exceções e segurança;
 - evitar trivia e detalhes periféricos quando houver conteúdo de maior valor;
-- evitar perguntas duplicadas ou apenas reformuladas.
+- respostas longas/listas são quebradas quando possível;
+- casos clínicos devem exigir aplicação, não apenas recitação;
+- números, unidades, critérios e conectores lógicos devem ser preservados.
 
-O backend também aplica uma proteção de atomicidade e pode descartar cards muito
-amplos antes de mostrá-los ao usuário.
+## Modos de quantidade
 
-### Reposição automática da quantidade
+- **Essencial — 8 cards**;
+- **Equilibrada — 15 cards**;
+- **Detalhada — 30 cards**;
+- **Personalizada — 3 a 40 cards**.
 
-A quantidade escolhida passou a ser um **número-alvo**. Se, por exemplo, forem
-solicitados 15 cards e apenas 12 sobreviverem às validações de fonte, qualidade e
-duplicidade, o Fichário faz até duas rodadas de reposição. Nessas rodadas ele:
-
-1. procura páginas menos cobertas;
-2. informa à IA quais perguntas já foram aceitas;
-3. pede apenas cards novos e de alto valor;
-4. interrompe a reposição se ela começar a repetir conteúdo.
-
-A prioridade continua sendo qualidade: se não houver conteúdo suficiente, o
-Fichário pode retornar menos cards em vez de inventar ou forçar perguntas fracas.
-
-### Modos de quantidade
-
-- **Essencial — 8 cards:** somente pontos de alto valor de prova ou que mudam conduta;
-- **Equilibrada — 15 cards:** diagnóstico, conduta, critérios e números importantes;
-- **Detalhada — 30 cards:** cobertura ampla, incluindo exceções e pontos de segunda linha;
-- **Personalizada — 3 a 40 cards:** número-alvo escolhido pelo usuário.
+A quantidade é um alvo, não uma obrigação de inventar conteúdo. Se o sistema
+não conseguir validar todos os cards, retorna menos e informa isso na revisão.
 
 ## Privacidade e armazenamento
 
 O PDF/DOCX original não é enviado para Firebase Storage. O texto extraído fica na
 memória da sessão do navegador e não é salvo no Realtime Database. Durante a
-geração, os trechos necessários são enviados à Netlify Function e então ao
-provedor de IA.
+geração, somente os trechos necessários aos lotes são enviados à Netlify Function
+e então ao provedor de IA.
 
 Não usar materiais com dados identificáveis de pacientes.
 
@@ -94,9 +156,7 @@ A variável obrigatória é:
 GEMINI_API_KEY
 ```
 
-Ela deve permanecer na Netlify, sem prefixo `VITE_`. O gerador de flashcards usa
-por padrão `gemini-3.5-flash-lite`; uma troca futura específica pode ser feita
-com `GEMINI_FLASHCARD_MODEL`.
+Ela deve permanecer na Netlify, sem prefixo `VITE_`.
 
 ## Publicação
 
@@ -114,6 +174,6 @@ Não é necessário rodar `npm install`, `npm run dev` ou Git no computador loca
 
 ## Próxima etapa
 
-Depois de validar a qualidade da Fase 7.5 com materiais reais, a próxima etapa é
-liberar **edição/aprovação individual e salvamento dos cards no Firebase**, antes
-do modo de estudo e repetição espaçada.
+Depois de validar o pipeline 7.6 com materiais reais, a próxima etapa é liberar
+**edição/aprovação individual e salvamento dos cards no Firebase**, antes do modo
+de estudo e repetição espaçada.

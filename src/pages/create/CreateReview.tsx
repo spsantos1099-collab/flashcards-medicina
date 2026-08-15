@@ -82,7 +82,6 @@ export default function CreateReview() {
 
 function ReviewCard({ card, index }: { card: Flashcard; index: number }) {
   const [revealed, setRevealed] = useState(false);
-  const source = card.sources[0];
 
   return (
     <article className="rounded-card border border-ink-200/70 dark:border-ink-800 bg-white dark:bg-ink-900 p-5 shadow-card">
@@ -120,14 +119,23 @@ function ReviewCard({ card, index }: { card: Flashcard; index: number }) {
             </div>
           )}
 
-          {source && (
+          {card.sources.length > 0 && (
             <div className="mt-4 rounded-lg bg-paper dark:bg-ink-950/50 border border-ink-100 dark:border-ink-800 px-3.5 py-3">
               <div className="source-tab text-clinical-600 dark:text-clinical-300">
-                FONTE · {source.title}{source.page ? ` · P. ${source.page}` : ""}
+                {card.sources.length === 1 ? "FONTE" : `EVIDÊNCIAS · ${card.sources.length}`}
               </div>
-              {source.excerpt && (
-                <p className="font-mono text-xs leading-5 text-ink-400 mt-2">“{source.excerpt}”</p>
-              )}
+              <div className="mt-2 space-y-3">
+                {card.sources.map((source, sourceIndex) => (
+                  <div key={source.id} className={sourceIndex > 0 ? "pt-3 border-t border-ink-100 dark:border-ink-800" : ""}>
+                    <div className="source-tab text-ink-500 dark:text-ink-300">
+                      {card.sources.length > 1 ? `FONTE ${sourceIndex + 1} · ` : ""}{source.title}{source.page ? ` · P. ${source.page}` : ""}
+                    </div>
+                    {source.excerpt && (
+                      <p className="font-mono text-xs leading-5 text-ink-400 mt-1.5">“{source.excerpt}”</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

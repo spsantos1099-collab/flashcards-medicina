@@ -262,16 +262,24 @@ export default function CreateConfigure() {
       </div>
 
       <div className="rounded-card border border-clinical-300 dark:border-clinical-700/60 bg-clinical-50/50 dark:bg-clinical-700/10 px-4 py-4">
-        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI 3.5 FLASH-LITE</div>
+        <div className="source-tab text-clinical-700 dark:text-clinical-200">IA CONECTADA · GEMINI 3.5</div>
       </div>
 
       {generating && generationProgress && (
         <div className="mt-4 rounded-lg border border-ink-200/70 dark:border-ink-800 bg-white/60 dark:bg-ink-950/30 px-3.5 py-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="font-medium text-ink-800 dark:text-paper">
-              {generationProgress.stage === "refill"
-                ? `Completando seleção · tentativa ${generationProgress.refillRound ?? 1}`
-                : `Gerando lote ${Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de ${generationProgress.totalBatches}`}
+              {generationProgress.stage === "retrying"
+                ? `Reconectando à IA · tentativa ${generationProgress.retryAttempt ?? 2}`
+                : generationProgress.stage === "validating"
+                  ? "Revisando casos clínicos"
+                  : generationProgress.stage === "refill"
+                    ? `Completando seleção · rodada ${generationProgress.refillRound ?? 1}`
+                    : generationProgress.currentType === "clinical_case"
+                      ? "Construindo casos clínicos"
+                      : generationProgress.currentType === "cloze"
+                        ? "Gerando cards Cloze"
+                        : "Gerando cards básicos"}
             </span>
             <span className="source-tab text-clinical-600 dark:text-clinical-300">
               {generationProgress.generatedCards}/{generationProgress.targetCards} CARDS
@@ -283,7 +291,7 @@ export default function CreateConfigure() {
               style={{ width: `${Math.max(6, Math.min(100, (generationProgress.generatedCards / generationProgress.targetCards) * 100))}%` }}
             />
           </div>
-          <p className="text-xs text-ink-400 mt-2">O Fichário prioriza cards úteis e tenta completar o número escolhido sem repetir perguntas.</p>
+          <p className="text-xs text-ink-400 mt-2">O Fichário preserva os cards aprovados, evita repetições e tenta completar a seleção automaticamente.</p>
         </div>
       )}
 
@@ -302,9 +310,15 @@ export default function CreateConfigure() {
       >
         {generating
           ? generationProgress
-            ? generationProgress.stage === "refill"
-              ? `Completando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
-              : `Processando lote ${Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de ${generationProgress.totalBatches}...`
+            ? generationProgress.stage === "retrying"
+              ? "Tentando novamente automaticamente..."
+              : generationProgress.stage === "validating"
+                ? "Revisando casos clínicos..."
+                : generationProgress.stage === "refill"
+                  ? `Completando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
+                  : generationProgress.currentType === "clinical_case"
+                    ? "Construindo casos clínicos..."
+                    : `Gerando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
             : "Preparando geração..."
           : `Gerar ${cardCount} flashcards`}
       </button>
