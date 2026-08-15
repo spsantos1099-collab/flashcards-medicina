@@ -14,6 +14,8 @@ const MAX_DOCUMENT_CHARACTERS = 120_000;
 const ATOMIC_SLICE_CHARACTERS = 6_000;
 const TARGET_BATCH_CHARACTERS = 14_000;
 const MAX_CARDS_PER_BATCH = 4;
+const MAX_REFILL_ROUNDS = 2;
+const MAX_EXCLUDED_QUESTIONS = 32;
 
 interface ApiCard {
   type: CardType;
@@ -48,6 +50,9 @@ export interface GenerationProgress {
   completedBatches: number;
   totalBatches: number;
   generatedCards: number;
+  targetCards: number;
+  stage: "initial" | "refill";
+  refillRound?: number;
 }
 
 export class AIGenerationError extends Error {
@@ -67,10 +72,7 @@ function temporaryId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function normalizeSource(
-  document: ExtractedDocument,
-  apiCard: ApiCard,
-): CardSource {
+function normalizeSource(document: ExtractedDocument, apiCard: ApiCard): CardSource {
   const page = document.extension === "pdf" && apiCard.sourcePage > 0
     ? apiCard.sourcePage
     : undefined;
@@ -231,8 +233,6 @@ function buildBatches(document: ExtractedDocument, requestedCards: number): Gene
 
   let groups = partitionSlices(slices, Math.min(desiredBatches, slices.length));
 
-  // Se o documento for muito grande para a quantidade pedida de cards, usamos
-  // trechos distribuídos ao longo do material em vez de concentrar tudo no início.
   if (groups.length > requestedCards) {
     groups = selectEvenly(groups, Math.max(1, requestedCards));
   }
@@ -249,6 +249,51 @@ function buildBatches(document: ExtractedDocument, requestedCards: number): Gene
   });
 }
 
+function buildRefillBatch(
+  document: ExtractedDocument,
+  remainingCards: number,
+  currentCards: Flashcard[],
+): GenerationBatch | null {
+  const slices = makeSourceSlices(document);
+  if (slices.length === 0 || remainingCards <= 0) return null;
+
+  const pageCoverage = new Map<number, number>();
+  for (const card of currentCards) {
+    const page = card.sources[0]?.page ?? 0;
+    pageCoverage.set(page, (pageCoverage.get(page) ?? 0) + 1);
+  }
+
+  const rankedSlices = [...slices].sort((a, b) => {
+    const coverageA = pageCoverage.get(a.pageNumber) ?? 0;
+    const coverageB = pageCoverage.get(b.pageNumber) ?? 0;
+    if (coverageA !== coverageB) return coverageA - coverageB;
+    return a.pageNumber - b.pageNumber;
+  });
+
+  const selected: SourceSlice[] = [];
+  let characters = 0;
+  const selectedPages = new Set<number>();
+
+  for (const slice of rankedSlices) {
+    if (characters + slice.text.length > TARGET_BATCH_CHARACTERS && selected.length > 0) continue;
+
+    selected.push(slice);
+    selectedPages.add(slice.pageNumber);
+    characters += slice.text.length;
+
+    if (characters >= 9_000 && selectedPages.size >= Math.min(3, rankedSlices.length)) break;
+    if (characters >= TARGET_BATCH_CHARACTERS) break;
+  }
+
+  if (selected.length === 0) return null;
+
+  return {
+    pages: selected,
+    // Pedimos um pequeno excedente para compensar descartes por duplicidade/fonte.
+    cardCount: Math.min(MAX_CARDS_PER_BATCH, Math.max(2, remainingCards + 1)),
+  };
+}
+
 function normalizeQuestion(value: string) {
   return value
     .normalize("NFKD")
@@ -259,18 +304,54 @@ function normalizeQuestion(value: string) {
     .toLocaleLowerCase("pt-BR");
 }
 
+function questionTokens(value: string) {
+  return new Set(
+    normalizeQuestion(value)
+      .split(" ")
+      .filter((token) => token.length >= 4),
+  );
+}
+
+function questionsAreTooSimilar(a: string, b: string) {
+  const tokensA = questionTokens(a);
+  const tokensB = questionTokens(b);
+  if (tokensA.size < 5 || tokensB.size < 5) return false;
+
+  let intersection = 0;
+  for (const token of tokensA) {
+    if (tokensB.has(token)) intersection += 1;
+  }
+  const union = new Set([...tokensA, ...tokensB]).size;
+  const similarity = union > 0 ? intersection / union : 0;
+  return similarity >= 0.82;
+}
+
+function isDuplicateQuestion(question: string, currentCards: Flashcard[]) {
+  const normalized = normalizeQuestion(question);
+  if (!normalized) return true;
+
+  return currentCards.some((card) => {
+    const existing = normalizeQuestion(card.question);
+    return existing === normalized || questionsAreTooSimilar(card.question, question);
+  });
+}
+
 async function requestBatch({
   idToken,
   deck,
   document,
   options,
   batch,
+  excludedQuestions = [],
+  generationPhase = "initial",
 }: {
   idToken: string;
   deck: Deck;
   document: ExtractedDocument;
   options: GenerationOptions;
   batch: GenerationBatch;
+  excludedQuestions?: string[];
+  generationPhase?: "initial" | "refill";
 }): Promise<ApiResponse> {
   const response = await fetch("/.netlify/functions/generate-flashcards", {
     method: "POST",
@@ -294,6 +375,8 @@ async function requestBatch({
       options: {
         ...options,
         cardCount: batch.cardCount,
+        generationPhase,
+        excludedQuestions: excludedQuestions.slice(-MAX_EXCLUDED_QUESTIONS),
       },
     }),
   });
@@ -320,6 +403,26 @@ async function requestBatch({
   }
 
   return payload as ApiResponse;
+}
+
+function appendUniqueCards({
+  apiCards,
+  deck,
+  document,
+  generatedAt,
+  target,
+}: {
+  apiCards: ApiCard[];
+  deck: Deck;
+  document: ExtractedDocument;
+  generatedAt: string;
+  target: Flashcard[];
+}) {
+  for (const apiCard of apiCards) {
+    if (!apiCard?.question?.trim() || !apiCard?.answer?.trim()) continue;
+    if (isDuplicateQuestion(apiCard.question, target)) continue;
+    target.push(mapCard(deck, document, apiCard, generatedAt));
+  }
 }
 
 export async function generateFlashcardsFromDocument({
@@ -352,11 +455,16 @@ export async function generateFlashcardsFromDocument({
 
   const idToken = await user.getIdToken();
   const collectedCards: Flashcard[] = [];
-  const seenQuestions = new Set<string>();
   let model = "";
   let generatedAt = new Date().toISOString();
 
-  onProgress?.({ completedBatches: 0, totalBatches: batches.length, generatedCards: 0 });
+  onProgress?.({
+    completedBatches: 0,
+    totalBatches: batches.length,
+    generatedCards: 0,
+    targetCards: options.cardCount,
+    stage: "initial",
+  });
 
   for (let index = 0; index < batches.length; index += 1) {
     const payload = await requestBatch({
@@ -365,24 +473,76 @@ export async function generateFlashcardsFromDocument({
       document,
       options,
       batch: batches[index],
+      excludedQuestions: collectedCards.map((card) => card.question),
+      generationPhase: "initial",
     });
 
     model = payload.model;
     generatedAt = payload.generatedAt;
-
-    for (const apiCard of payload.cards) {
-      if (!apiCard?.question?.trim() || !apiCard?.answer?.trim()) continue;
-      const key = normalizeQuestion(apiCard.question);
-      if (!key || seenQuestions.has(key)) continue;
-      seenQuestions.add(key);
-      collectedCards.push(mapCard(deck, document, apiCard, payload.generatedAt));
-    }
+    appendUniqueCards({
+      apiCards: payload.cards,
+      deck,
+      document,
+      generatedAt: payload.generatedAt,
+      target: collectedCards,
+    });
 
     onProgress?.({
       completedBatches: index + 1,
       totalBatches: batches.length,
-      generatedCards: collectedCards.length,
+      generatedCards: Math.min(collectedCards.length, options.cardCount),
+      targetCards: options.cardCount,
+      stage: "initial",
     });
+  }
+
+  for (let refillRound = 1; refillRound <= MAX_REFILL_ROUNDS && collectedCards.length < options.cardCount; refillRound += 1) {
+    const remaining = options.cardCount - collectedCards.length;
+    const refillBatch = buildRefillBatch(document, remaining, collectedCards);
+    if (!refillBatch) break;
+
+    onProgress?.({
+      completedBatches: batches.length,
+      totalBatches: batches.length,
+      generatedCards: collectedCards.length,
+      targetCards: options.cardCount,
+      stage: "refill",
+      refillRound,
+    });
+
+    const before = collectedCards.length;
+    const payload = await requestBatch({
+      idToken,
+      deck,
+      document,
+      options,
+      batch: refillBatch,
+      excludedQuestions: collectedCards.map((card) => card.question),
+      generationPhase: "refill",
+    });
+
+    model = payload.model;
+    generatedAt = payload.generatedAt;
+    appendUniqueCards({
+      apiCards: payload.cards,
+      deck,
+      document,
+      generatedAt: payload.generatedAt,
+      target: collectedCards,
+    });
+
+    onProgress?.({
+      completedBatches: batches.length,
+      totalBatches: batches.length,
+      generatedCards: Math.min(collectedCards.length, options.cardCount),
+      targetCards: options.cardCount,
+      stage: "refill",
+      refillRound,
+    });
+
+    // Se uma rodada de reposição não trouxe nenhum card novo, outra tentativa
+    // tende a repetir o mesmo padrão. Encerramos para preservar qualidade/cota.
+    if (collectedCards.length === before) break;
   }
 
   const cards = collectedCards.slice(0, options.cardCount);

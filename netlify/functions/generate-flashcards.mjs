@@ -58,6 +58,13 @@ function normalizeInput(body) {
   const priorities = Array.isArray(options.priorities)
     ? options.priorities.map((item) => cleanText(item, 80)).filter(Boolean).slice(0, 8)
     : [];
+  const excludedQuestions = Array.isArray(options.excludedQuestions)
+    ? options.excludedQuestions.map((item) => cleanText(item, 280)).filter(Boolean).slice(-32)
+    : [];
+  const amountMode = ["essential", "balanced", "detailed", "custom"].includes(options.amountMode)
+    ? options.amountMode
+    : "balanced";
+  const generationPhase = options.generationPhase === "refill" ? "refill" : "initial";
 
   return {
     deck: {
@@ -76,6 +83,9 @@ function normalizeInput(body) {
       cardCount,
       cardTypes: cardTypes.length ? cardTypes : ["basic"],
       priorities,
+      excludedQuestions,
+      amountMode,
+      generationPhase,
     },
   };
 }
@@ -90,9 +100,25 @@ function buildPrompt(input) {
 
   const priorities = input.options.priorities.length
     ? input.options.priorities.join(", ")
-    : "nenhuma prioridade adicional; escolha o conteúdo mais relevante deste trecho";
+    : "nenhuma prioridade manual; faça a seleção pelo valor educacional e clínico";
 
-  return `Você cria flashcards profissionais para uma estudante de Medicina.
+  const amountGuidance = {
+    essential: "Seja altamente seletivo: priorize somente conhecimentos que mudam diagnóstico, conduta, segurança ou aparecem com frequência em prova.",
+    balanced: "Faça cobertura equilibrada dos pontos de maior valor: diagnóstico, conduta, critérios, números, contraindicações e exceções, sem transformar detalhes periféricos em cards.",
+    detailed: "Faça cobertura ampla do trecho, incluindo pontos de segunda linha úteis para prova, sem sacrificar atomicidade nem criar trivia irrelevante.",
+    custom: "Tente atingir a quantidade solicitada usando apenas cards úteis e não redundantes; não crie conteúdo fraco só para preencher número.",
+  }[input.options.amountMode];
+
+  const excluded = input.options.excludedQuestions.length
+    ? `\nNÃO REPITA NEM REFORMULE estes cards já aceitos:\n${input.options.excludedQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`
+    : "";
+
+  const refillGuidance = input.options.generationPhase === "refill"
+    ? "Esta é uma rodada de REPOSIÇÃO. Gere somente cards novos, cobrindo pontos importantes ainda não representados. Evite variações cosméticas de perguntas já existentes."
+    : "Esta é a geração principal. Distribua os cards pelos tópicos importantes do trecho, evitando concentração excessiva em um único subtópico.";
+
+  return `Você é um elaborador de flashcards médicos para internato, residência e provas de Medicina.
+Seu objetivo NÃO é apenas extrair fatos: é transformar o material em perguntas de recuperação ativa com alto valor educacional e clínico.
 
 REGRAS DE FONTE — OBRIGATÓRIAS
 - Use SOMENTE o conteúdo entre <documento> e </documento>.
@@ -102,16 +128,34 @@ REGRAS DE FONTE — OBRIGATÓRIAS
 - Para cada card, copie um trecho CURTO E LITERAL que sustente diretamente pergunta e resposta.
 - Para PDF, informe a página exata indicada pelos marcadores [PÁGINA X]. Para DOCX, use sourcePage = 0.
 
-QUALIDADE
-- Gere até ${input.options.cardCount} cards de alta utilidade. Se não houver conteúdo suficiente, gere menos.
+PADRÃO PEDAGÓGICO — NÍVEL INTERNATO/RESIDÊNCIA
+- Priorize conhecimentos que ajudam a decidir: diagnóstico, próxima conduta, indicação, contraindicação, limiar, dose, classificação, gravidade, encaminhamento, monitorização, exceção e segurança.
+- Dê preferência a pontos com alto potencial de prova ou aplicação clínica, desde que presentes no documento.
+- Evite trivia, frases meramente descritivas, números epidemiológicos pouco acionáveis e detalhes periféricos quando houver conteúdo mais importante.
+- Uma pergunta deve testar UM objetivo principal de recuperação. Regra padrão: 1 card = 1 decisão, 1 conceito, 1 critério-chave ou 1 relação importante.
+- Evite perguntas do tipo “Quais são todos os X...” quando a resposta vira uma lista longa. Se houver vários critérios independentes, divida-os em cards menores.
+- Só mantenha uma lista completa em um único card quando a própria lista for canônica, curta e claramente importante para ser memorizada como conjunto.
+- Para basic, prefira resposta curta e objetiva. Se a resposta exigir mais de 3 itens independentes, normalmente o card está amplo demais.
+- Para cloze, esconda apenas o elemento de maior valor de recuperação. Use {{c1::...}} e, no máximo, duas lacunas quando fizerem parte do MESMO conceito.
+- Para clinical_case, construa mini-casos apenas com dados explicitamente sustentados no documento. Você pode reorganizar os fatos em forma de cenário, mas NÃO invente idade, exames, sintomas, comorbidades ou condutas ausentes.
+- Se “clinical_case” não estiver entre os tipos permitidos, não crie caso clínico.
+- Quando houver mais de um tipo permitido, varie os formatos ao longo do conjunto quando isso melhorar a aprendizagem; não force uma divisão artificial por tipo.
+- Preserve números, unidades, critérios, doses, classificações e exceções exatamente como aparecem.
+- Evite duplicatas, perguntas vagas e reformulações do mesmo objetivo.
+- Português do Brasil. Linguagem objetiva, estilo de preparação para prova/residência.
+
+SELEÇÃO DO CONTEÚDO
+- ${amountGuidance}
+- ${refillGuidance}
+- Prioridades escolhidas pelo usuário: ${priorities}.
 - Tipos permitidos: ${input.options.cardTypes.join(", ")}.
-- basic: uma ideia por card, pergunta objetiva e resposta enxuta.
-- cloze: a pergunta deve conter uma lacuna no formato {{c1::conteúdo}}.
-- clinical_case: não invente idade, sintomas, exames ou condutas que não estejam explícitos no documento.
-- Prioridades: ${priorities}.
-- Preserve números, critérios, doses, classificações e exceções exatamente como aparecem.
-- Evite duplicatas e perguntas vagas.
-- Português do Brasil, nível internato/residência.
+- Gere até ${input.options.cardCount} cards de alta qualidade. Tente atingir esse número se houver conteúdo útil; se não houver, gere menos em vez de inventar ou repetir.${excluded}
+
+QUALIDADE DA PERGUNTA
+- Prefira perguntas que exijam recuperação ativa, não reconhecimento superficial.
+- Sempre que o texto permitir, converta um fato em uma pergunta de decisão/critério em vez de apenas pedir definição.
+- Um card difícil deve ser difícil pelo raciocínio ou pela precisão do conteúdo, não por ser longo ou confuso.
+- A explicação deve ser curta e esclarecer por que a resposta está correta com base no documento; não acrescente conhecimento externo.
 
 FORMATO
 Responda SOMENTE com JSON válido, sem markdown e sem comentários.
@@ -196,6 +240,31 @@ function normalizeTags(value) {
   return [];
 }
 
+function estimateIndependentItems(answer) {
+  const text = String(answer || "").trim();
+  if (!text) return 0;
+
+  const semicolonItems = text.split(/;/).map((item) => item.trim()).filter(Boolean);
+  if (semicolonItems.length >= 4) return semicolonItems.length;
+
+  const enumerated = text.match(/(?:^|\s)[(]?[a-h1-9][).:-]\s/gi) || [];
+  if (enumerated.length >= 4) return enumerated.length;
+
+  const commaItems = text.split(/,/).map((item) => item.trim()).filter(Boolean);
+  if (commaItems.length >= 5 && commaItems.every((item) => item.length <= 110)) {
+    return commaItems.length;
+  }
+
+  return Math.max(1, semicolonItems.length);
+}
+
+function passesAtomicityGuard(card) {
+  const questionLimit = card.type === "clinical_case" ? 700 : 480;
+  if (card.question.length > questionLimit || card.answer.length > 700) return false;
+  if (card.type !== "cloze" && estimateIndependentItems(card.answer) > 3) return false;
+  return true;
+}
+
 function sanitizeCards(cards, input) {
   const seen = new Set();
 
@@ -219,6 +288,9 @@ function sanitizeCards(cards, input) {
       };
     })
     .filter((card) => card.question && card.answer && card.sourceExcerpt)
+    .filter(passesAtomicityGuard)
+    .filter((card) => input.options.cardTypes.includes(card.type))
+    .filter((card) => card.type !== "cloze" || /\{\{c\d+::.+?\}\}/.test(card.question))
     .filter((card) => input.document.extension !== "pdf" || card.sourcePage > 0)
     .filter((card) => {
       const key = normalizeForSourceCheck(card.question);

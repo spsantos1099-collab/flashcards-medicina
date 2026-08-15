@@ -40,14 +40,16 @@ export default function CreateReview() {
   return (
     <div className="max-w-2xl">
       <div className="source-tab text-clinical-600 dark:text-clinical-300 mb-2">ETAPA 3 · REVISÃO</div>
-      <h1 className="font-display text-2xl text-ink-900 dark:text-paper mb-1">Primeiros cards gerados pela IA</h1>
+      <h1 className="font-display text-2xl text-ink-900 dark:text-paper mb-1">Revisar flashcards</h1>
       <p className="text-ink-400 mb-2">
-        {generationMeta.returnedCount} de aproximadamente {generationMeta.requestedCount} flashcards foram gerados a partir de <strong className="font-medium text-ink-600 dark:text-ink-200">{generationMeta.documentName}</strong>.
+        {generationMeta.returnedCount === generationMeta.requestedCount
+          ? `${generationMeta.returnedCount} flashcards foram gerados`
+          : `${generationMeta.returnedCount} de ${generationMeta.requestedCount} flashcards puderam ser gerados com qualidade`} a partir de <strong className="font-medium text-ink-600 dark:text-ink-200">{generationMeta.documentName}</strong>.
       </p>
       <p className="source-tab mb-6">{generationMeta.provider.toUpperCase()} · {generationMeta.model}</p>
 
       <div className="rounded-card border border-amber-300/70 bg-amber-50/70 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 mb-6">
-        <div className="source-tab text-amber-800 dark:text-amber-300">FASE 7 · PRÉVIA REAL</div>
+        <div className="source-tab text-amber-800 dark:text-amber-300">REVISÃO ANTES DE SALVAR</div>
         <p className="text-sm text-amber-900/80 dark:text-amber-100/80 mt-1">
           Clique em <strong>Mostrar resposta</strong> para conferir cada card. Em cards Cloze, as marcações técnicas são escondidas e aparecem como lacunas. A fonte só é exibida depois da resposta para não entregar o conteúdo antes da hora.
         </p>

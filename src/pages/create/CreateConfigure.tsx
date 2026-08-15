@@ -7,10 +7,10 @@ import { AIGenerationError, generateFlashcardsFromDocument, type GenerationProgr
 import type { CardType, GenerationOptions } from "../../types";
 
 const AMOUNTS = [
-  { id: "essential", label: "Essencial", description: "Somente conceitos de maior importância.", count: 8 },
-  { id: "balanced", label: "Equilibrada", description: "Boa cobertura sem excesso de cards.", count: 15 },
-  { id: "detailed", label: "Detalhada", description: "Cobertura extensa do documento.", count: 24 },
-  { id: "custom", label: "Personalizada", description: "Você escolhe aproximadamente quantos cards.", count: 15 },
+  { id: "essential", label: "Essencial", description: "Só o que tem alto valor de prova ou muda conduta.", count: 8 },
+  { id: "balanced", label: "Equilibrada", description: "Diagnóstico, conduta, critérios e números importantes.", count: 15 },
+  { id: "detailed", label: "Detalhada", description: "Cobertura ampla, incluindo exceções e pontos de segunda linha.", count: 30 },
+  { id: "custom", label: "Personalizada", description: "Você define o número-alvo de cards.", count: 15 },
 ] as const;
 
 type AmountMode = (typeof AMOUNTS)[number]["id"];
@@ -22,6 +22,7 @@ const CARD_TYPES: Array<{ id: CardType; label: string }> = [
 ];
 
 const PRIORITIES = [
+  "Conduta e decisão clínica",
   "Conceitos fundamentais",
   "Diagnóstico",
   "Tratamento",
@@ -268,19 +269,21 @@ export default function CreateConfigure() {
         <div className="mt-4 rounded-lg border border-ink-200/70 dark:border-ink-800 bg-white/60 dark:bg-ink-950/30 px-3.5 py-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="font-medium text-ink-800 dark:text-paper">
-              Gerando lote {Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de {generationProgress.totalBatches}
+              {generationProgress.stage === "refill"
+                ? `Completando seleção · tentativa ${generationProgress.refillRound ?? 1}`
+                : `Gerando lote ${Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de ${generationProgress.totalBatches}`}
             </span>
             <span className="source-tab text-clinical-600 dark:text-clinical-300">
-              {generationProgress.generatedCards} CARDS
+              {generationProgress.generatedCards}/{generationProgress.targetCards} CARDS
             </span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
             <div
               className="h-full bg-clinical-500 transition-all"
-              style={{ width: `${Math.max(6, (generationProgress.completedBatches / generationProgress.totalBatches) * 100)}%` }}
+              style={{ width: `${Math.max(6, Math.min(100, (generationProgress.generatedCards / generationProgress.targetCards) * 100))}%` }}
             />
           </div>
-          <p className="text-xs text-ink-400 mt-2">Aguarde nesta página enquanto os trechos são processados.</p>
+          <p className="text-xs text-ink-400 mt-2">O Fichário prioriza cards úteis e tenta completar o número escolhido sem repetir perguntas.</p>
         </div>
       )}
 
@@ -299,9 +302,11 @@ export default function CreateConfigure() {
       >
         {generating
           ? generationProgress
-            ? `Processando lote ${Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de ${generationProgress.totalBatches}...`
+            ? generationProgress.stage === "refill"
+              ? `Completando ${generationProgress.generatedCards}/${generationProgress.targetCards} cards...`
+              : `Processando lote ${Math.min(generationProgress.completedBatches + 1, generationProgress.totalBatches)} de ${generationProgress.totalBatches}...`
             : "Preparando geração..."
-          : `Gerar aproximadamente ${cardCount} flashcards`}
+          : `Gerar ${cardCount} flashcards`}
       </button>
 
       <Link
