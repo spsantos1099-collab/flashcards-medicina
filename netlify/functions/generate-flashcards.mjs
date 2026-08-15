@@ -1,4 +1,4 @@
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.6-flash";
 const MAX_REQUEST_CHARACTERS = 120_000;
 const ALLOWED_TYPES = new Set(["basic", "cloze", "clinical_case"]);
 const ALLOWED_DIFFICULTIES = new Set(["easy", "medium", "hard"]);
@@ -285,8 +285,11 @@ export default async (request) => {
 
   let geminiResponse;
   try {
+    // Gemini 3: use the Interactions API, which is the current recommended
+    // interface for new projects and structured outputs. We keep store=false
+    // because the source may contain user study material.
     geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
       {
         method: "POST",
         headers: {
@@ -294,12 +297,17 @@ export default async (request) => {
           "x-goog-api-key": geminiApiKey,
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 16384,
-            responseMimeType: "application/json",
-            responseJsonSchema: responseSchema,
+          model,
+          input: prompt,
+          store: false,
+          generation_config: {
+            max_output_tokens: 16384,
+            thinking_level: "low",
+          },
+          response_format: {
+            type: "text",
+            mime_type: "application/json",
+            schema: responseSchema,
           },
         }),
       },
@@ -318,8 +326,8 @@ export default async (request) => {
       {
         error: geminiResponse.status === 429
           ? "Limite da IA atingido."
-          : "A IA recusou ou não conseguiu processar esta geração.",
-        code: geminiResponse.status === 429 ? "ai_quota" : "ai_provider_error",
+          : `O Gemini recusou a geração (erro ${geminiResponse.status}).`,
+        code: geminiResponse.status === 429 ? "ai_quota" : `ai_provider_${geminiResponse.status}`,
       },
       status,
     );
@@ -332,10 +340,17 @@ export default async (request) => {
     return json({ error: "Resposta inválida da IA.", code: "invalid_ai_json" }, 502);
   }
 
-  const text = geminiData?.candidates?.[0]?.content?.parts
-    ?.map((part) => (typeof part?.text === "string" ? part.text : ""))
-    .join("")
-    .trim();
+  // REST Interactions responses expose model output as steps. Concatenate
+  // all text blocks from model_output steps (equivalent to SDK output_text).
+  const text = Array.isArray(geminiData?.steps)
+    ? geminiData.steps
+        .filter((step) => step?.type === "model_output" && Array.isArray(step?.content))
+        .flatMap((step) => step.content)
+        .filter((content) => content?.type === "text" && typeof content?.text === "string")
+        .map((content) => content.text)
+        .join("")
+        .trim()
+    : "";
 
   if (!text) {
     console.error("Gemini sem texto utilizável", JSON.stringify(geminiData).slice(0, 1600));

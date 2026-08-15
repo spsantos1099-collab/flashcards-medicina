@@ -174,7 +174,7 @@ Fluxo:
 
 ### Modelo padrão
 
-`gemini-2.5-flash`
+`gemini-3.6-flash`
 
 Pode ser trocado futuramente pela variável `GEMINI_MODEL`, sem alterar o
 frontend. A camada `src/services/ai/` também foi separada para facilitar a troca
