@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# Redireciona todas as rotas para index.html — necessário porque este é um
+# Single Page Application (React Router cuida das rotas no navegador).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
