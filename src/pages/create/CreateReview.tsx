@@ -93,6 +93,7 @@ export default function CreateReview() {
   }
 
   const examMode = generationMeta.provider === "exam_parser";
+  const importMode = generationMeta.provider === "import_parser";
 
   const setStatus = (cardId: string, status: ReviewStatus) => {
     updateItems((current) => current.map((item) => item.card.id === cardId ? { ...item, status } : item));
@@ -223,7 +224,7 @@ export default function CreateReview() {
           <p className="text-ink-400">
             {items.length} cards em revisão · <strong className="font-medium text-ink-600 dark:text-ink-200">{generationMeta.documentName}</strong>
           </p>
-          <p className="source-tab mt-2">{examMode ? "MODO PROVA · GABARITO DO PDF" : "MEU MATERIAL · GERAÇÃO AUTOMÁTICA"}</p>
+          <p className="source-tab mt-2">{examMode ? "MODO PROVA · GABARITO DO PDF" : importMode ? "FLASHCARDS PRONTOS · IMPORTAÇÃO 1:1" : "MEU MATERIAL · GERAÇÃO AUTOMÁTICA"}</p>
         </div>
         <button
           type="button"
@@ -276,7 +277,7 @@ export default function CreateReview() {
             onReject={() => setStatus(item.card.id, "rejected")}
             onEdit={() => setEditingCard(item.card)}
             onRegenerate={() => handleRegenerate(item.card)}
-            allowRegenerate={!examMode}
+            allowRegenerate={!examMode && !importMode}
             onDelete={() => removeCard(item.card.id)}
           />
         ))}

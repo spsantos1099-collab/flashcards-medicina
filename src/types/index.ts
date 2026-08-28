@@ -166,7 +166,7 @@ export interface GenerationOptions {
 }
 
 export interface GenerationMeta {
-  provider: "gemini" | "exam_parser";
+  provider: "gemini" | "exam_parser" | "import_parser";
   model: string;
   requestedCount: number;
   returnedCount: number;
@@ -193,6 +193,12 @@ export interface StudySessionRecord {
   startedAt: string;
   endedAt?: string;
   reviewedCards: number;
+  cardIds?: string[];
+  currentIndex?: number;
+  sessionKey?: string;
+  mode?: "scheduled" | "free";
+  status?: "active" | "completed";
+  updatedAt?: string;
 }
 
 

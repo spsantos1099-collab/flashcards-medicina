@@ -489,20 +489,48 @@ export async function setCardFavorite(
   });
 }
 
-/** Inicia uma sessão real de estudo para um deck. */
-export async function createStudySession(uid: string, deckId: string): Promise<StudySessionRecord> {
+/** Inicia uma sessão persistente de estudo para um deck. */
+export async function createStudySession(
+  uid: string,
+  deckId: string,
+  options?: { cardIds?: string[]; sessionKey?: string; mode?: "scheduled" | "free" },
+): Promise<StudySessionRecord> {
   const sessionRef = push(ref(database, `studySessions/${uid}`));
   const id = sessionRef.key;
   if (!id) throw new Error("Não foi possível iniciar a sessão de estudo.");
 
+  const now = isoNow();
   const session: StudySessionRecord = {
     id,
     deckId,
-    startedAt: isoNow(),
+    startedAt: now,
     reviewedCards: 0,
+    currentIndex: 0,
+    cardIds: options?.cardIds || [],
+    sessionKey: options?.sessionKey || "queue|all|all|",
+    mode: options?.mode || "scheduled",
+    status: "active",
+    updatedAt: now,
   };
   await set(sessionRef, session);
   return session;
+}
+
+/** Recupera a sessão ativa mais recente para permitir continuar de onde parou. */
+export async function getActiveStudySession(
+  uid: string,
+  deckId: string,
+  sessionKey: string,
+  mode: "scheduled" | "free",
+): Promise<StudySessionRecord | null> {
+  const snapshot = await get(ref(database, `studySessions/${uid}`));
+  if (!snapshot.exists()) return null;
+  const raw = snapshot.val() as Record<string, Omit<StudySessionRecord, "id"> & { id?: string }>;
+  const sessions = Object.entries(raw)
+    .map(([key, value]) => ({ ...value, id: value.id || key }))
+    .filter((session) => session.deckId === deckId && session.status !== "completed" && !session.endedAt && session.sessionKey === sessionKey && (session.mode || "scheduled") === mode)
+    .sort((a, b) => new Date(b.updatedAt || b.startedAt).getTime() - new Date(a.updatedAt || a.startedAt).getTime());
+  return sessions[0] || null;
 }
 
 /** Atualiza o progresso da sessão; ao concluir, grava endedAt. */
@@ -512,9 +540,13 @@ export async function updateStudySessionProgress(
   reviewedCards: number,
   completed = false,
 ): Promise<void> {
+  const now = isoNow();
   await update(ref(database, `studySessions/${uid}/${sessionId}`), {
     reviewedCards,
-    endedAt: completed ? isoNow() : null,
+    currentIndex: reviewedCards,
+    status: completed ? "completed" : "active",
+    endedAt: completed ? now : null,
+    updatedAt: now,
   });
 }
 

@@ -31,6 +31,9 @@ export default function DeckDetail() {
   const [cardDeleteBusy, setCardDeleteBusy] = useState(false);
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [editingBusy, setEditingBusy] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [studyChoiceOpen, setStudyChoiceOpen] = useState(false);
 
   const allSelected = cards.length > 0 && selectedCardIds.size === cards.length;
   const selectedCount = selectedCardIds.size;
@@ -171,6 +174,47 @@ export default function DeckDetail() {
     }
   };
 
+  const handleCreateCard = async (values: CardEditorValues) => {
+    if (!user) return;
+    setManualBusy(true);
+    setActionError(null);
+    try {
+      const now = new Date().toISOString();
+      const id = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? `manual-${crypto.randomUUID()}`
+        : `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const card: Flashcard = {
+        id,
+        deckId: deck.id,
+        type: values.type,
+        difficulty: values.difficulty,
+        topic: values.topic.trim() || deck.topic || deck.title,
+        question: values.question.trim(),
+        answer: values.answer.trim(),
+        explanation: values.explanation.trim() || undefined,
+        tags: values.tags.split(/[,;]+/).map((tag) => tag.trim()).filter(Boolean).slice(0, 6),
+        learningObjective: `manual:${values.question.trim().slice(0, 120)}`,
+        sources: [{
+          id: `source-${id}`,
+          kind: "manual",
+          title: "Criado manualmente",
+          provider: "Usuário",
+          verificationStatus: "manual",
+        }],
+        createdAt: now,
+        updatedAt: now,
+      };
+      const { saveCardsToDeck } = await import("../lib/database");
+      await saveCardsToDeck(user.uid, deck.id, [card]);
+      setManualOpen(false);
+    } catch (error) {
+      console.error("Não foi possível criar o card.", error);
+      setActionError("Não foi possível criar este card agora.");
+    } finally {
+      setManualBusy(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl">
       <Link to="/library" className="text-sm text-ink-400 hover:text-clinical-600 transition-colors">
@@ -194,8 +238,9 @@ export default function DeckDetail() {
       <div className="grid grid-cols-3 gap-4 mt-7 rounded-card border border-ink-200/70 dark:border-ink-800 bg-white dark:bg-ink-900 p-5 shadow-card">
         <Stat label="Para revisar" value={deck.dueToday} />
         <Stat label="Novos" value={deck.newCards} />
-        <Stat label="Aprendidos" value={deck.learnedCards} />
+        <Stat label="Já estudados" value={deck.learnedCards} />
       </div>
+      <p className="text-xs text-ink-400 mt-2">“Para revisar” são cards já estudados que voltaram para revisão. Por isso, esse número pode fazer parte de “Já estudados”.</p>
 
       {actionError && !editOpen && !deleteOpen && !cardDeleteOpen && !editingCard && (
         <div className="mt-5 rounded-lg border border-signal-300/60 bg-signal-50/70 dark:border-signal-800 dark:bg-signal-950/20 px-4 py-3 text-sm text-signal-700 dark:text-signal-300">
@@ -204,12 +249,13 @@ export default function DeckDetail() {
       )}
 
       <div className="flex flex-wrap gap-3 mt-8">
-        <Link
-          to={`/study/${deck.id}`}
+        <button
+          type="button"
+          onClick={() => setStudyChoiceOpen(true)}
           className="rounded-lg bg-ink-900 dark:bg-clinical-600 text-paper px-4 py-2.5 text-sm font-medium hover:bg-ink-800 dark:hover:bg-clinical-500 transition-colors"
         >
           Estudar agora
-        </Link>
+        </button>
         {cards.some((card) => card.isFavorite) && (
           <Link
             to={`/study/${deck.id}?scope=favorites`}
@@ -218,6 +264,13 @@ export default function DeckDetail() {
             Estudar favoritos
           </Link>
         )}
+        <button
+          type="button"
+          onClick={() => { setActionError(null); setManualOpen(true); }}
+          className="rounded-lg border border-ink-200 dark:border-ink-700 px-4 py-2.5 text-sm font-medium text-ink-700 dark:text-paper hover:bg-ink-50 dark:hover:bg-ink-800 transition-colors"
+        >
+          + Criar card
+        </button>
         <Link
           to={`/create/upload?deckId=${deck.id}`}
           className="rounded-lg border border-ink-200 dark:border-ink-700 px-4 py-2.5 text-sm font-medium text-ink-700 dark:text-paper hover:bg-ink-50 dark:hover:bg-ink-800 transition-colors"
@@ -266,7 +319,7 @@ export default function DeckDetail() {
           <div className="source-tab">DECK VAZIO</div>
           <h2 className="font-display text-xl text-ink-900 dark:text-paper mt-1">Pronto para receber conteúdo</h2>
           <p className="text-sm text-ink-400 mt-2 max-w-xl">
-            Gere flashcards a partir de um PDF/DOCX, use o Modo Prova ou adicione conteúdo pela tela de revisão.
+            Gere flashcards a partir de um PDF/DOCX, use o Modo Prova ou crie um card manualmente aqui mesmo.
           </p>
         </div>
       ) : (
@@ -414,6 +467,38 @@ export default function DeckDetail() {
       />
 
       <CardEditorModal
+        open={manualOpen}
+        mode="create"
+        defaultTopic={deck.topic || deck.title}
+        onClose={() => setManualOpen(false)}
+        onSubmit={(values) => void handleCreateCard(values)}
+      />
+
+      {studyChoiceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button type="button" aria-label="Fechar" className="absolute inset-0 bg-ink-950/50" onClick={() => setStudyChoiceOpen(false)} />
+          <div className="relative w-full max-w-lg rounded-card bg-paper dark:bg-ink-900 border border-ink-200 dark:border-ink-800 p-6 shadow-cardHover">
+            <div className="source-tab text-clinical-600 dark:text-clinical-300">ESCOLHA SUA SESSÃO</div>
+            <h2 className="font-display text-2xl text-ink-900 dark:text-paper mt-1">O que você quer estudar?</h2>
+            <div className="grid gap-3 mt-5">
+              <Link to={`/study/${deck.id}`} className="rounded-lg border border-clinical-300 dark:border-clinical-700 p-4 hover:bg-clinical-50/60 dark:hover:bg-clinical-900/10">
+                <div className="font-medium text-ink-900 dark:text-paper">Revisão de hoje · {deck.dueToday + deck.newCards} cards</div>
+                <div className="text-sm text-ink-400 mt-1">Segue a fila programada e atualiza as próximas revisões.</div>
+              </Link>
+              <Link to={`/study/${deck.id}?scope=all&mode=free`} className="rounded-lg border border-ink-200 dark:border-ink-700 p-4 hover:bg-ink-50 dark:hover:bg-ink-800">
+                <div className="font-medium text-ink-900 dark:text-paper">Deck completo · {deck.totalCards} cards</div>
+                <div className="text-sm text-ink-400 mt-1">Revisão livre: passa por todos sem alterar o cronograma.</div>
+              </Link>
+              <Link to={`/study/${deck.id}?mode=free`} className="rounded-lg border border-ink-200 dark:border-ink-700 p-4 hover:bg-ink-50 dark:hover:bg-ink-800">
+                <div className="font-medium text-ink-900 dark:text-paper">Personalizar sessão</div>
+                <div className="text-sm text-ink-400 mt-1">Use filtros por novos, difíceis, favoritos, tipo e dificuldade.</div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CardEditorModal
         open={Boolean(editingCard)}
         mode="edit"
         card={editingCard}
@@ -422,9 +507,9 @@ export default function DeckDetail() {
         onSubmit={(values) => void handleEditCard(values)}
       />
 
-      {editingBusy && (
+      {(editingBusy || manualBusy) && (
         <div className="fixed inset-x-0 bottom-5 z-[60] mx-auto w-fit rounded-full bg-ink-900 px-4 py-2 text-sm text-paper shadow-cardHover">
-          Salvando card…
+          {manualBusy ? "Criando card…" : "Salvando card…"}
         </div>
       )}
 

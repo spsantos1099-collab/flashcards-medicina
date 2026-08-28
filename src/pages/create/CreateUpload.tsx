@@ -14,6 +14,7 @@ import {
   DocumentExtractionError,
   extractDocument,
 } from "../../lib/documentExtraction";
+import { detectReadyFlashcards } from "../../lib/readyFlashcardParser";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ["pdf", "docx"];
@@ -59,6 +60,9 @@ export default function CreateUpload() {
     setTargetDeckId,
     setDocumentRecord,
     setExtractedDocument,
+    setGeneratedCards,
+    setGenerationMeta,
+    setGenerationOptions,
   } = useCreateFlow();
 
   const [dragging, setDragging] = useState(false);
@@ -142,6 +146,28 @@ export default function CreateUpload() {
       await linkDocumentToDeck(user.uid, targetDeckId, record);
 
       setExtractedDocument(extracted);
+
+      const ready = detectReadyFlashcards(extracted, targetDeckId);
+      if (ready.detected) {
+        setGeneratedCards(ready.cards);
+        setGenerationOptions({
+          amountMode: "custom",
+          cardCount: ready.pairCount,
+          cardTypes: ["basic"],
+          priorities: ["imported-ready-cards"],
+        });
+        setGenerationMeta({
+          provider: "import_parser",
+          model: "detecção local P/R",
+          requestedCount: ready.pairCount,
+          returnedCount: ready.pairCount,
+          generatedAt: new Date().toISOString(),
+          documentName: extracted.name,
+        });
+        navigate("/create/review?imported=ready");
+        return;
+      }
+
       navigate("/create/configure");
     } catch (error) {
       console.error("Não foi possível preparar o documento.", error);
@@ -174,7 +200,7 @@ export default function CreateUpload() {
         Enviar material de estudo
       </h1>
       <p className="text-ink-400 mb-8 max-w-xl">
-        Envie um PDF ou DOCX e use seu próprio material como base para os flashcards.
+        Envie um PDF ou DOCX. Se o arquivo já tiver pares de pergunta e resposta prontos, o Fichário tenta reconhecê-los e preservá-los 1 a 1.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3 mb-7">

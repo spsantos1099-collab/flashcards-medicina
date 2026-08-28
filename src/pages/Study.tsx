@@ -7,6 +7,7 @@ import { useDecks } from "../hooks/useDecks";
 import { useReviews } from "../hooks/useReviews";
 import {
   createStudySession,
+  getActiveStudySession,
   recordStudyRating,
   setCardFavorite,
   updateStudySessionProgress,
@@ -52,7 +53,9 @@ export default function Study() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => readFilters(searchParams), [searchParams]);
+  const freeMode = searchParams.get("mode") === "free";
   const filterKey = `${filters.scope}|${filters.type}|${filters.difficulty}|${filters.query}`;
+  const sessionKey = `${filterKey}|${freeMode ? "free" : "scheduled"}`;
 
   const { cards, loading, error } = useCards(user?.uid, deckId);
   const { reviews, loading: reviewsLoading } = useReviews(user?.uid, deckId);
@@ -66,6 +69,7 @@ export default function Study() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<ReviewRating, number>>(emptyRatings);
   const [searchDraft, setSearchDraft] = useState(filters.query);
+  const [savedNotice, setSavedNotice] = useState(false);
   const sessionPromiseRef = useRef<Promise<StudySessionRecord> | null>(null);
 
   const availableDecks = useMemo(() => decks.filter((deck) => deck.totalCards > 0), [decks]);
@@ -82,12 +86,36 @@ export default function Study() {
     setActionError(null);
     setRatings(emptyRatings);
     sessionPromiseRef.current = null;
-  }, [deckId, filterKey]);
+  }, [deckId, sessionKey]);
 
   useEffect(() => {
-    if (!deckId || loading || reviewsLoading || sessionCards !== null) return;
-    setSessionCards(buildFilteredStudyQueue(cards, reviews, filters, new Date()));
-  }, [cards, deckId, filters, loading, reviews, reviewsLoading, sessionCards]);
+    if (!user || !deckId || loading || reviewsLoading || sessionCards !== null) return;
+    let cancelled = false;
+
+    void (async () => {
+      const baseCards = buildFilteredStudyQueue(cards, reviews, filters, new Date());
+      try {
+        const active = await getActiveStudySession(user.uid, deckId, sessionKey, freeMode ? "free" : "scheduled");
+        if (cancelled) return;
+        if (active?.cardIds?.length) {
+          const byId = new Map(cards.map((card) => [card.id, card]));
+          const restored = active.cardIds.map((id) => byId.get(id)).filter(Boolean) as Flashcard[];
+          if (restored.length > 0 && (active.currentIndex || 0) < restored.length) {
+            setSessionCards(restored);
+            setCurrentIndex(Math.min(active.currentIndex || active.reviewedCards || 0, restored.length));
+            sessionPromiseRef.current = Promise.resolve(active);
+            return;
+          }
+        }
+        setSessionCards(baseCards);
+      } catch (error) {
+        console.error("Não foi possível recuperar a sessão anterior.", error);
+        if (!cancelled) setSessionCards(baseCards);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [cards, deckId, filters, freeMode, loading, reviews, reviewsLoading, sessionCards, sessionKey, user]);
 
   const studyCards = sessionCards ?? [];
   const currentCard = studyCards[currentIndex];
@@ -99,10 +127,14 @@ export default function Study() {
   const ensureSession = useCallback(async () => {
     if (!user || !deckId) throw new Error("Sessão de estudo indisponível.");
     if (!sessionPromiseRef.current) {
-      sessionPromiseRef.current = createStudySession(user.uid, deckId);
+      sessionPromiseRef.current = createStudySession(user.uid, deckId, {
+        cardIds: studyCards.map((card) => card.id),
+        sessionKey,
+        mode: freeMode ? "free" : "scheduled",
+      });
     }
     return sessionPromiseRef.current;
-  }, [deckId, user]);
+  }, [deckId, freeMode, sessionKey, studyCards, user]);
 
   const handleRate = useCallback(async (rating: ReviewRating) => {
     if (!user || !deckId || !currentCard || busy) return;
@@ -111,19 +143,23 @@ export default function Study() {
     setActionError(null);
     try {
       const session = await ensureSession();
-      await recordStudyRating(user.uid, deckId, currentCard, rating);
+      if (!freeMode) {
+        await recordStudyRating(user.uid, deckId, currentCard, rating);
+      }
       const nextReviewed = currentIndex + 1;
       await updateStudySessionProgress(user.uid, session.id, nextReviewed, nextReviewed >= studyCards.length);
       setRatings((current) => ({ ...current, [rating]: current[rating] + 1 }));
       setCurrentIndex(nextReviewed);
       setRevealed(false);
+      setSavedNotice(true);
+      window.setTimeout(() => setSavedNotice(false), 1800);
     } catch (error) {
       console.error("Não foi possível registrar a avaliação.", error);
       setActionError("Não foi possível salvar esta avaliação. Tente novamente.");
     } finally {
       setBusy(false);
     }
-  }, [busy, currentCard, currentIndex, deckId, ensureSession, studyCards.length, user]);
+  }, [busy, currentCard, currentIndex, deckId, ensureSession, freeMode, studyCards.length, user]);
 
   const handleToggleFavorite = useCallback(async () => {
     if (!user || !currentCard || favoriteBusyId) return;
@@ -326,7 +362,7 @@ export default function Study() {
         <div className="rounded-card border border-ink-200/70 dark:border-ink-800 bg-white dark:bg-ink-900 shadow-card p-7 text-center">
           <div className="source-tab text-clinical-600 dark:text-clinical-300">SESSÃO CONCLUÍDA</div>
           <h1 className="font-display text-3xl text-ink-900 dark:text-paper mt-2">Revisão finalizada</h1>
-          <p className="text-sm text-ink-400 mt-2">{studyCards.length} {studyCards.length === 1 ? "card estudado" : "cards estudados"}. As próximas revisões foram agendadas.</p>
+          <p className="text-sm text-ink-400 mt-2">{studyCards.length} {studyCards.length === 1 ? "card estudado" : "cards estudados"}. {freeMode ? "Esta revisão livre não alterou o cronograma dos cards." : "As próximas revisões foram agendadas."}</p>
 
           <div className="grid grid-cols-4 gap-2 mt-7 text-center">
             <ResultStat label="Errei" value={ratings.again} />
@@ -347,6 +383,11 @@ export default function Study() {
   return (
     <div>
       <div className="max-w-xl mx-auto">
+        {freeMode && (
+          <div className="mb-4 rounded-lg border border-clinical-300 dark:border-clinical-800 bg-clinical-50/60 dark:bg-clinical-900/10 px-4 py-3 text-sm">
+            <strong className="text-clinical-700 dark:text-clinical-200">Revisão livre.</strong> <span className="text-ink-500 dark:text-ink-200">Você pode revisar à vontade; esta sessão não altera o cronograma de repetição.</span>
+          </div>
+        )}
         {filterPanel}
       </div>
 
@@ -387,9 +428,11 @@ export default function Study() {
         />
       )}
 
-      <p className="max-w-xl mx-auto mt-5 text-center text-xs text-ink-400">
-        Espaço revela a resposta · 1 Errei · 2 Difícil · 3 Bom · 4 Fácil
-      </p>
+      <div className="max-w-xl mx-auto mt-5 text-center text-xs text-ink-400 space-y-1">
+        <p>Espaço revela a resposta · 1 Errei · 2 Difícil · 3 Bom · 4 Fácil</p>
+        <p>{freeMode ? "Na revisão livre, essas respostas não mudam a próxima revisão." : "Errei, Difícil, Bom e Fácil ajudam o Fichário a decidir quando este card deve voltar."}</p>
+        {savedNotice && <p className="text-clinical-600 dark:text-clinical-300 font-medium">✓ Progresso salvo</p>}
+      </div>
     </div>
   );
 }
