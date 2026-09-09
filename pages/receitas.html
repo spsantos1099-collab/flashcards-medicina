@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receitas · Controle Financeiro</title>
+  <script src="../js/theme-init.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body data-protegida="true" data-raiz="../">
+
+  <main class="container" style="padding-top: var(--esp-6); padding-bottom: var(--esp-7);">
+
+    <div class="topo-app">
+      <h1 class="topo-app__titulo" style="border:none; margin:0; padding:0;">Receitas</h1>
+      <div class="topo-app__usuario">
+        <span><strong data-usuario-resumo></strong></span>
+        <button data-sair class="botao-sair" type="button">Sair</button>
+      </div>
+    </div>
+
+    <nav class="nav-paginas">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="receitas.html" class="ativa">Receitas</a>
+      <a href="despesas.html">Despesas</a>
+      <a href="cartoes.html">Cartões</a>
+      <a href="calendario.html">Calendário</a>
+      <a href="metas.html">Metas</a>
+      <a href="relatorios.html">Relatórios</a>
+      <a href="configuracoes.html">Configurações</a>
+    </nav>
+
+    <div class="cabecalho-pagina">
+      <div></div>
+      <button class="botao-novo" id="botaoNovaReceita" type="button">+ Nova receita</button>
+    </div>
+
+    <div class="barra-filtros">
+      <input type="search" id="campoBusca" placeholder="Pesquisar por descrição...">
+      <select id="filtroStatus">
+        <option value="">Todos os status</option>
+        <option value="recebido">Recebido</option>
+        <option value="pendente">Pendente</option>
+        <option value="atrasado">Atrasado</option>
+      </select>
+      <select id="filtroCategoria">
+        <option value="">Todas as categorias</option>
+      </select>
+    </div>
+
+    <div id="listaReceitas" class="lista-registros"></div>
+
+  </main>
+
+  <datalist id="categoriasReceita"></datalist>
+
+  <script type="module">
+    import { observarUsuario, observarLista, adicionarRegistro, atualizarRegistro, removerRegistro } from "../js/firebase.js";
+    import { formatarMoeda, formatarData, paraLista, iconeSvg } from "../js/utils.js";
+    import { CATEGORIAS_RECEITA_PADRAO } from "../js/config.js";
+    import { abrirModal, fecharModal, confirmarExclusao } from "../components/modal.js";
+    import { mostrarToast } from "../js/app.js";
+
+    let uidAtual = null;
+    let receitas = [];
+
+    const listaReceitas = document.getElementById("listaReceitas");
+    const campoBusca = document.getElementById("campoBusca");
+    const filtroStatus = document.getElementById("filtroStatus");
+    const filtroCategoria = document.getElementById("filtroCategoria");
+    const datalistCategorias = document.getElementById("categoriasReceita");
+
+    document.getElementById("botaoNovaReceita").addEventListener("click", () => abrirFormulario());
+
+    campoBusca.addEventListener("input", renderizarLista);
+    filtroStatus.addEventListener("change", renderizarLista);
+    filtroCategoria.addEventListener("change", renderizarLista);
+
+    function atualizarCategoriasDisponiveis() {
+      const categoriasUsadas = [...new Set(receitas.map((r) => r.categoria).filter(Boolean))];
+      const todasCategorias = [...new Set([...CATEGORIAS_RECEITA_PADRAO, ...categoriasUsadas])].sort();
+
+      datalistCategorias.innerHTML = todasCategorias.map((c) => `<option value="${c}"></option>`).join("");
+
+      const categoriaSelecionada = filtroCategoria.value;
+      filtroCategoria.innerHTML = '<option value="">Todas as categorias</option>' +
+        todasCategorias.map((c) => `<option value="${c}">${c}</option>`).join("");
+      filtroCategoria.value = categoriaSelecionada;
+    }
+
+    function renderizarLista() {
+      const busca = campoBusca.value.trim().toLowerCase();
+      const status = filtroStatus.value;
+      const categoria = filtroCategoria.value;
+
+      const filtradas = receitas
+        .filter((r) => !busca || (r.descricao || "").toLowerCase().includes(busca))
+        .filter((r) => !status || r.status === status)
+        .filter((r) => !categoria || r.categoria === categoria)
+        .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+
+      if (!filtradas.length) {
+        listaReceitas.innerHTML = '<p class="estado-vazio">Nenhuma receita encontrada. Clique em "Nova receita" para começar.</p>';
+        return;
+      }
+
+      listaReceitas.innerHTML = filtradas.map((r) => `
+        <div class="linha-registro">
+          <div>
+            <div class="linha-registro__descricao">${r.descricao || "Sem descrição"}</div>
+            <div class="linha-registro__categoria">${r.categoria || "Sem categoria"}</div>
+          </div>
+          <div class="linha-registro__data">${formatarData(r.data)}</div>
+          <div><span class="badge-status badge-status--${r.status}">${rotuloStatus(r.status)}</span></div>
+          <div class="linha-registro__valor numero" style="color: var(--cor-receita)">${formatarMoeda(r.valor)}</div>
+          <div class="linha-registro__acoes">
+            <button class="botao-icone" title="Editar" data-acao="editar" data-id="${r.id}">${iconeSvg("editar")}</button>
+            <button class="botao-icone" title="Duplicar" data-acao="duplicar" data-id="${r.id}">⧉</button>
+            <button class="botao-icone botao-icone--perigo" title="Excluir" data-acao="excluir" data-id="${r.id}">${iconeSvg("excluir")}</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function rotuloStatus(status) {
+      return { recebido: "Recebido", pendente: "Pendente", atrasado: "Atrasado" }[status] || status;
+    }
+
+    listaReceitas.addEventListener("click", async (evento) => {
+      const botao = evento.target.closest("[data-acao]");
+      if (!botao) return;
+
+      const id = botao.dataset.id;
+      const receita = receitas.find((r) => r.id === id);
+      if (!receita) return;
+
+      if (botao.dataset.acao === "editar") {
+        abrirFormulario(receita);
+      }
+
+      if (botao.dataset.acao === "duplicar") {
+        const { id: _id, ...dados } = receita;
+        await adicionarRegistro(uidAtual, "receitas", { ...dados, createdAt: Date.now(), updatedAt: Date.now() });
+        mostrarToast("Receita duplicada com sucesso!", "sucesso");
+      }
+
+      if (botao.dataset.acao === "excluir") {
+        const confirmou = await confirmarExclusao(`Excluir a receita "${receita.descricao}"? Essa ação não pode ser desfeita.`);
+        if (confirmou) {
+          try {
+            await removerRegistro(uidAtual, "receitas", id);
+            mostrarToast("Receita excluída.", "sucesso");
+          } catch (erro) {
+            mostrarToast("Não foi possível excluir. Tente novamente.", "erro");
+          }
+        }
+      }
+    });
+
+    function abrirFormulario(receitaExistente = null) {
+      const editando = Boolean(receitaExistente);
+      const r = receitaExistente || {};
+
+      const overlay = abrirModal(`
+        <h3 class="modal-titulo">${editando ? "Editar receita" : "Nova receita"}</h3>
+        <form id="formularioReceita">
+          <div class="grade-formulario">
+            <div class="campo-formulario campo-formulario--largura-total">
+              <label for="campoDescricao">Descrição</label>
+              <input type="text" id="campoDescricao" required value="${r.descricao || ""}" placeholder="Ex: Salário">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoValor">Valor (R$)</label>
+              <input type="number" id="campoValor" step="0.01" min="0" required value="${r.valor ?? ""}">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoData">Data</label>
+              <input type="date" id="campoData" required value="${r.data || new Date().toISOString().slice(0,10)}">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoCategoria">Categoria</label>
+              <input type="text" id="campoCategoria" list="categoriasReceita" required value="${r.categoria || ""}" placeholder="Escolha ou digite uma nova">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoStatus">Status</label>
+              <select id="campoStatus">
+                <option value="recebido" ${r.status === "recebido" ? "selected" : ""}>Recebido</option>
+                <option value="pendente" ${(!r.status || r.status === "pendente") ? "selected" : ""}>Pendente</option>
+                <option value="atrasado" ${r.status === "atrasado" ? "selected" : ""}>Atrasado</option>
+              </select>
+            </div>
+            <div class="campo-formulario">
+              <label for="campoFormaPagamento">Forma de recebimento</label>
+              <input type="text" id="campoFormaPagamento" value="${r.formaPagamento || ""}" placeholder="Ex: Pix">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoContaBancaria">Conta bancária</label>
+              <input type="text" id="campoContaBancaria" value="${r.contaBancaria || ""}" placeholder="Ex: Nubank">
+            </div>
+            <div class="campo-formulario campo-formulario--largura-total">
+              <label for="campoObservacoes">Observações</label>
+              <textarea id="campoObservacoes">${r.observacoes || ""}</textarea>
+            </div>
+          </div>
+          <div class="modal-acoes">
+            <button type="button" class="botao-secundario" data-fechar-modal>Cancelar</button>
+            <button type="submit" class="botao-primario" style="width:auto;">Salvar</button>
+          </div>
+        </form>
+      `);
+
+      overlay.querySelector("#formularioReceita").addEventListener("submit", async (evento) => {
+        evento.preventDefault();
+
+        const dados = {
+          descricao: overlay.querySelector("#campoDescricao").value.trim(),
+          valor: Number(overlay.querySelector("#campoValor").value),
+          data: overlay.querySelector("#campoData").value,
+          categoria: overlay.querySelector("#campoCategoria").value.trim(),
+          status: overlay.querySelector("#campoStatus").value,
+          formaPagamento: overlay.querySelector("#campoFormaPagamento").value.trim(),
+          contaBancaria: overlay.querySelector("#campoContaBancaria").value.trim(),
+          observacoes: overlay.querySelector("#campoObservacoes").value.trim(),
+          updatedAt: Date.now()
+        };
+
+        try {
+          if (editando) {
+            await atualizarRegistro(uidAtual, "receitas", receitaExistente.id, dados);
+            mostrarToast("Receita atualizada!", "sucesso");
+          } else {
+            await adicionarRegistro(uidAtual, "receitas", { ...dados, createdAt: Date.now() });
+            mostrarToast("Receita adicionada!", "sucesso");
+          }
+          fecharModal();
+        } catch (erro) {
+          mostrarToast("Não foi possível salvar. Tente novamente.", "erro");
+        }
+      });
+    }
+
+    observarUsuario((usuario) => {
+      if (!usuario || uidAtual === usuario.uid) return;
+      uidAtual = usuario.uid;
+
+      observarLista(uidAtual, "receitas", (dados) => {
+        receitas = paraLista(dados);
+        atualizarCategoriasDisponiveis();
+        renderizarLista();
+      });
+    });
+  </script>
+
+  <script type="module" src="../js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Despesas · Controle Financeiro</title>
+  <script src="../js/theme-init.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body data-protegida="true" data-raiz="../">
+
+  <main class="container" style="padding-top: var(--esp-6); padding-bottom: var(--esp-7);">
+
+    <div class="topo-app">
+      <h1 class="topo-app__titulo" style="border:none; margin:0; padding:0;">Despesas</h1>
+      <div class="topo-app__usuario">
+        <span><strong data-usuario-resumo></strong></span>
+        <button data-sair class="botao-sair" type="button">Sair</button>
+      </div>
+    </div>
+
+    <nav class="nav-paginas">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="receitas.html">Receitas</a>
+      <a href="despesas.html" class="ativa">Despesas</a>
+      <a href="cartoes.html">Cartões</a>
+      <a href="calendario.html">Calendário</a>
+      <a href="metas.html">Metas</a>
+      <a href="relatorios.html">Relatórios</a>
+      <a href="configuracoes.html">Configurações</a>
+    </nav>
+
+    <div class="cabecalho-pagina">
+      <div></div>
+      <button class="botao-novo" id="botaoNovaDespesa" type="button">+ Nova despesa</button>
+    </div>
+
+    <div class="barra-filtros">
+      <input type="search" id="campoBusca" placeholder="Pesquisar por descrição...">
+      <select id="filtroStatus">
+        <option value="">Todos os status</option>
+        <option value="pago">Pago</option>
+        <option value="pendente">Pendente</option>
+        <option value="atrasado">Atrasado</option>
+      </select>
+      <select id="filtroCategoria">
+        <option value="">Todas as categorias</option>
+      </select>
+    </div>
+
+    <div id="listaDespesas" class="lista-registros"></div>
+
+  </main>
+
+  <datalist id="categoriasDespesa"></datalist>
+  <datalist id="pessoasRelacionadas"></datalist>
+
+  <script type="module">
+    import { observarUsuario, observarLista, adicionarRegistro, atualizarRegistro, removerRegistro } from "../js/firebase.js";
+    import { formatarMoeda, formatarData, paraLista, iconeSvg } from "../js/utils.js";
+    import { CATEGORIAS_DESPESA_PADRAO } from "../js/config.js";
+    import { abrirModal, fecharModal, confirmarExclusao } from "../components/modal.js";
+    import { mostrarToast } from "../js/app.js";
+
+    let uidAtual = null;
+    let despesas = [];
+    let cartoes = [];
+
+    const listaDespesas = document.getElementById("listaDespesas");
+    const campoBusca = document.getElementById("campoBusca");
+    const filtroStatus = document.getElementById("filtroStatus");
+    const filtroCategoria = document.getElementById("filtroCategoria");
+    const datalistCategorias = document.getElementById("categoriasDespesa");
+    const datalistPessoas = document.getElementById("pessoasRelacionadas");
+
+    document.getElementById("botaoNovaDespesa").addEventListener("click", () => abrirFormulario());
+
+    campoBusca.addEventListener("input", renderizarLista);
+    filtroStatus.addEventListener("change", renderizarLista);
+    filtroCategoria.addEventListener("change", renderizarLista);
+
+    function atualizarCategoriasDisponiveis() {
+      const categoriasUsadas = [...new Set(despesas.map((d) => d.categoria).filter(Boolean))];
+      const todasCategorias = [...new Set([...CATEGORIAS_DESPESA_PADRAO, ...categoriasUsadas])].sort();
+
+      datalistCategorias.innerHTML = todasCategorias.map((c) => `<option value="${c}"></option>`).join("");
+
+      const categoriaSelecionada = filtroCategoria.value;
+      filtroCategoria.innerHTML = '<option value="">Todas as categorias</option>' +
+        todasCategorias.map((c) => `<option value="${c}">${c}</option>`).join("");
+      filtroCategoria.value = categoriaSelecionada;
+    }
+
+    function atualizarPessoasDisponiveis() {
+      const pessoasDosCartoes = cartoes
+        .filter((cartao) => cartao.tipo === "terceiro" && cartao.titular)
+        .map((cartao) => cartao.titular.trim());
+      const pessoasDasDespesas = despesas
+        .map((despesa) => (despesa.pessoaRelacionada || "").trim())
+        .filter(Boolean);
+      const pessoas = [...new Set([...pessoasDosCartoes, ...pessoasDasDespesas])]
+        .sort((a, b) => a.localeCompare(b));
+      datalistPessoas.innerHTML = pessoas.map((nome) => `<option value="${nome}"></option>`).join("");
+    }
+
+    function renderizarLista() {
+      const busca = campoBusca.value.trim().toLowerCase();
+      const status = filtroStatus.value;
+      const categoria = filtroCategoria.value;
+
+      const filtradas = despesas
+        .filter((d) => !busca || (d.descricao || "").toLowerCase().includes(busca))
+        .filter((d) => !status || d.status === status)
+        .filter((d) => !categoria || d.categoria === categoria)
+        .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+
+      if (!filtradas.length) {
+        listaDespesas.innerHTML = '<p class="estado-vazio">Nenhuma despesa encontrada. Clique em "Nova despesa" para começar.</p>';
+        return;
+      }
+
+      listaDespesas.innerHTML = filtradas.map((d) => `
+        <div class="linha-registro">
+          <div>
+            <div class="linha-registro__descricao">${d.descricao || "Sem descrição"}</div>
+            <div class="linha-registro__categoria">
+              ${d.categoria || "Sem categoria"}${d.pessoaRelacionada ? ` · para ${d.pessoaRelacionada}` : ""}
+            </div>
+          </div>
+          <div class="linha-registro__data">${formatarData(d.data)}</div>
+          <div><span class="badge-status badge-status--${d.status}">${rotuloStatus(d.status)}</span></div>
+          <div class="linha-registro__valor numero" style="color: var(--cor-despesa)">${formatarMoeda(d.valor)}</div>
+          <div class="linha-registro__acoes">
+            <button class="botao-icone" title="Editar" data-acao="editar" data-id="${d.id}">${iconeSvg("editar")}</button>
+            <button class="botao-icone" title="Duplicar" data-acao="duplicar" data-id="${d.id}">⧉</button>
+            <button class="botao-icone botao-icone--perigo" title="Excluir" data-acao="excluir" data-id="${d.id}">${iconeSvg("excluir")}</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function rotuloStatus(status) {
+      return { pago: "Pago", pendente: "Pendente", atrasado: "Atrasado" }[status] || status;
+    }
+
+    listaDespesas.addEventListener("click", async (evento) => {
+      const botao = evento.target.closest("[data-acao]");
+      if (!botao) return;
+
+      const id = botao.dataset.id;
+      const despesa = despesas.find((d) => d.id === id);
+      if (!despesa) return;
+
+      if (botao.dataset.acao === "editar") {
+        abrirFormulario(despesa);
+      }
+
+      if (botao.dataset.acao === "duplicar") {
+        const { id: _id, ...dados } = despesa;
+        await adicionarRegistro(uidAtual, "despesas", { ...dados, createdAt: Date.now(), updatedAt: Date.now() });
+        mostrarToast("Despesa duplicada com sucesso!", "sucesso");
+      }
+
+      if (botao.dataset.acao === "excluir") {
+        const confirmou = await confirmarExclusao(`Excluir a despesa "${despesa.descricao}"? Essa ação não pode ser desfeita.`);
+        if (confirmou) {
+          try {
+            await removerRegistro(uidAtual, "despesas", id);
+            mostrarToast("Despesa excluída.", "sucesso");
+          } catch (erro) {
+            mostrarToast("Não foi possível excluir. Tente novamente.", "erro");
+          }
+        }
+      }
+    });
+
+    function abrirFormulario(despesaExistente = null) {
+      const editando = Boolean(despesaExistente);
+      const d = despesaExistente || {};
+
+      const overlay = abrirModal(`
+        <h3 class="modal-titulo">${editando ? "Editar despesa" : "Nova despesa"}</h3>
+        <form id="formularioDespesa">
+          <div class="grade-formulario">
+            <div class="campo-formulario campo-formulario--largura-total">
+              <label for="campoDescricao">Descrição</label>
+              <input type="text" id="campoDescricao" required value="${d.descricao || ""}" placeholder="Ex: Conta de luz">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoValor">Valor (R$)</label>
+              <input type="number" id="campoValor" step="0.01" min="0" required value="${d.valor ?? ""}">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoData">Data</label>
+              <input type="date" id="campoData" required value="${d.data || new Date().toISOString().slice(0,10)}">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoCategoria">Categoria</label>
+              <input type="text" id="campoCategoria" list="categoriasDespesa" required value="${d.categoria || ""}" placeholder="Escolha ou digite uma nova">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoStatus">Status</label>
+              <select id="campoStatus">
+                <option value="pago" ${d.status === "pago" ? "selected" : ""}>Pago</option>
+                <option value="pendente" ${(!d.status || d.status === "pendente") ? "selected" : ""}>Pendente</option>
+                <option value="atrasado" ${d.status === "atrasado" ? "selected" : ""}>Atrasado</option>
+              </select>
+            </div>
+            <div class="campo-formulario">
+              <label for="campoFormaPagamento">Forma de pagamento</label>
+              <input type="text" id="campoFormaPagamento" value="${d.formaPagamento || ""}" placeholder="Ex: Boleto">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoContaBancaria">Conta bancária</label>
+              <input type="text" id="campoContaBancaria" value="${d.contaBancaria || ""}" placeholder="Ex: Nubank">
+            </div>
+            <div class="campo-formulario">
+              <label for="campoPessoaRelacionada">Esse valor é para alguém? <span class="campo-opcional">opcional</span></label>
+              <input type="text" id="campoPessoaRelacionada" list="pessoasRelacionadas" value="${d.pessoaRelacionada || ""}" placeholder="Ex: Mãe">
+              <small class="campo-ajuda">Use quando essa despesa faz parte de um acerto com alguém.</small>
+            </div>
+            <div class="campo-formulario campo-formulario--largura-total">
+              <label for="campoObservacoes">Observações</label>
+              <textarea id="campoObservacoes">${d.observacoes || ""}</textarea>
+            </div>
+          </div>
+          <div class="modal-acoes">
+            <button type="button" class="botao-secundario" data-fechar-modal>Cancelar</button>
+            <button type="submit" class="botao-primario" style="width:auto;">Salvar</button>
+          </div>
+        </form>
+      `);
+
+      overlay.querySelector("#formularioDespesa").addEventListener("submit", async (evento) => {
+        evento.preventDefault();
+
+        const dados = {
+          descricao: overlay.querySelector("#campoDescricao").value.trim(),
+          valor: Number(overlay.querySelector("#campoValor").value),
+          data: overlay.querySelector("#campoData").value,
+          categoria: overlay.querySelector("#campoCategoria").value.trim(),
+          status: overlay.querySelector("#campoStatus").value,
+          formaPagamento: overlay.querySelector("#campoFormaPagamento").value.trim(),
+          contaBancaria: overlay.querySelector("#campoContaBancaria").value.trim(),
+          pessoaRelacionada: overlay.querySelector("#campoPessoaRelacionada").value.trim(),
+          observacoes: overlay.querySelector("#campoObservacoes").value.trim(),
+          updatedAt: Date.now()
+        };
+
+        try {
+          if (editando) {
+            await atualizarRegistro(uidAtual, "despesas", despesaExistente.id, dados);
+            mostrarToast("Despesa atualizada!", "sucesso");
+          } else {
+            await adicionarRegistro(uidAtual, "despesas", { ...dados, createdAt: Date.now() });
+            mostrarToast("Despesa adicionada!", "sucesso");
+          }
+          fecharModal();
+        } catch (erro) {
+          mostrarToast("Não foi possível salvar. Tente novamente.", "erro");
+        }
+      });
+    }
+
+    observarUsuario((usuario) => {
+      if (!usuario || uidAtual === usuario.uid) return;
+      uidAtual = usuario.uid;
+
+      observarLista(uidAtual, "despesas", (dados) => {
+        despesas = paraLista(dados);
+        atualizarCategoriasDisponiveis();
+        atualizarPessoasDisponiveis();
+        renderizarLista();
+      });
+
+      observarLista(uidAtual, "cartoes", (dados) => {
+        cartoes = paraLista(dados);
+        atualizarPessoasDisponiveis();
+      });
+    });
+  </script>
+
+  <script type="module" src="../js/app.js"></script>
+</body>
+</html>

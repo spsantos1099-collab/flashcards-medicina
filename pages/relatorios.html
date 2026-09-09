@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatórios · Controle Financeiro</title>
+  <script src="../js/theme-init.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body data-protegida="true" data-raiz="../">
+  <main class="container pagina-app pagina-relatorios">
+    <div class="topo-app">
+      <div>
+        <h1 class="topo-app__titulo">Relatórios</h1>
+        <p class="topo-app__subtitulo">Compare períodos e entenda para onde o dinheiro está indo.</p>
+      </div>
+      <div class="topo-app__usuario">
+        <span><strong data-usuario-resumo></strong></span>
+        <button data-sair class="botao-sair" type="button">Sair</button>
+      </div>
+    </div>
+
+    <nav class="nav-paginas" aria-label="Navegação principal">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="receitas.html">Receitas</a>
+      <a href="despesas.html">Despesas</a>
+      <a href="cartoes.html">Cartões</a>
+      <a href="calendario.html">Calendário</a>
+      <a href="metas.html">Metas</a>
+      <a href="relatorios.html" class="ativa">Relatórios</a>
+      <a href="configuracoes.html">Configurações</a>
+    </nav>
+
+    <section class="relatorio-filtros" aria-label="Período do relatório">
+      <div class="relatorio-periodo">
+        <label>De <input type="month" id="mesInicio"></label>
+        <label>Até <input type="month" id="mesFim"></label>
+      </div>
+      <div class="relatorio-atalhos" aria-label="Atalhos de período">
+        <button type="button" data-periodo="3">3 meses</button>
+        <button type="button" data-periodo="6">6 meses</button>
+        <button type="button" data-periodo="12" class="ativo">12 meses</button>
+        <button type="button" data-periodo="ano">Este ano</button>
+      </div>
+      <div class="relatorio-exportacoes">
+        <button class="botao-secundario botao-secundario--compacto" type="button" id="exportarCsv">CSV</button>
+        <button class="botao-secundario botao-secundario--compacto" type="button" id="exportarExcel">Excel</button>
+        <button class="botao-secundario botao-secundario--compacto" type="button" id="exportarPdf">PDF / Imprimir</button>
+      </div>
+    </section>
+
+    <div id="conteudoRelatorio" class="relatorio-conteudo">
+      <section class="relatorio-resumo" aria-label="Resumo do período">
+        <article><span>Recebido</span><strong class="numero valor-receita" id="relRecebido">R$ 0,00</strong></article>
+        <article><span>Gasto total</span><strong class="numero valor-despesa" id="relGasto">R$ 0,00</strong></article>
+        <article><span>Pago</span><strong class="numero" id="relPago">R$ 0,00</strong></article>
+        <article><span>Resultado realizado</span><strong class="numero" id="relResultado">R$ 0,00</strong></article>
+      </section>
+
+      <section class="relatorio-grade-principal">
+        <article class="card relatorio-card relatorio-card--linha">
+          <div class="relatorio-card__cabecalho">
+            <div><h2>Evolução mensal</h2><p>Receitas recebidas x gastos lançados.</p></div>
+            <div class="dashboard-legenda-fluxo" aria-hidden="true">
+              <span><i class="legenda-ponto legenda-ponto--receita"></i>Recebido</span>
+              <span><i class="legenda-ponto legenda-ponto--despesa"></i>Gastos</span>
+            </div>
+          </div>
+          <div id="graficoEvolucao"></div>
+        </article>
+
+        <article class="card relatorio-card">
+          <div class="relatorio-card__cabecalho"><div><h2>Despesas por categoria</h2><p>Inclui despesas e compras detalhadas dos cartões.</p></div></div>
+          <div id="graficoCategoriasDespesas"></div>
+        </article>
+
+        <article class="card relatorio-card">
+          <div class="relatorio-card__cabecalho"><div><h2>Receitas por categoria</h2><p>Distribuição das receitas registradas no período.</p></div></div>
+          <div id="graficoCategoriasReceitas"></div>
+        </article>
+      </section>
+
+      <section class="relatorio-destaques" id="relatorioDestaques"></section>
+
+      <section class="card relatorio-tabela-card">
+        <div class="relatorio-card__cabecalho"><div><h2>Comparativo mensal</h2><p>Uma linha por mês para facilitar a conferência.</p></div></div>
+        <div class="tabela-responsiva">
+          <table class="tabela-relatorio">
+            <thead><tr><th>Mês</th><th>Recebido</th><th>Despesas</th><th>Faturas</th><th>Total gasto</th><th>Pago</th><th>Resultado</th></tr></thead>
+            <tbody id="tabelaMensal"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card relatorio-tabela-card">
+        <div class="relatorio-card__cabecalho"><div><h2>Comparativo anual</h2><p>Consolidação automática dos anos incluídos no período.</p></div></div>
+        <div class="tabela-responsiva">
+          <table class="tabela-relatorio">
+            <thead><tr><th>Ano</th><th>Recebido</th><th>Gasto total</th><th>Pago</th><th>Resultado realizado</th></tr></thead>
+            <tbody id="tabelaAnual"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { observarUsuario, observarLista } from "../js/firebase.js";
+    import { paraLista, mesAtual, somarMeses, formatarMesAno, formatarMoeda } from "../js/utils.js";
+    import { criarGraficoLinha, criarGraficoBarrasHorizontais } from "../components/charts.js";
+    import {
+      mesesEntre, resumoMensalRelatorio, agruparPorAno,
+      categoriasDespesasPeriodo, categoriasReceitasPeriodo,
+      lancamentosPeriodo, destaquesPeriodo
+    } from "../components/relatorios.js";
+    import { mostrarToast } from "../js/app.js";
+
+    let uidAtual = null;
+    const dados = {
+      receitas: [], despesas: [], cartoes: [], parcelas: [],
+      faturasManuais: [], acertosPessoas: [], pagamentosFaturas: []
+    };
+
+    const mesInicio = document.getElementById("mesInicio");
+    const mesFim = document.getElementById("mesFim");
+    const atual = mesAtual();
+    mesFim.value = atual;
+    mesInicio.value = somarMeses(atual, -11);
+
+    function escaparHtml(valor = "") {
+      return String(valor).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    }
+
+    function rotuloMesCurto(mes) {
+      const [ano, numeroMes] = mes.split("-").map(Number);
+      return new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" })
+        .format(new Date(ano, numeroMes - 1, 1)).replace(" de ", "/");
+    }
+
+    function contextoAtual() {
+      const meses = mesesEntre(mesInicio.value, mesFim.value);
+      return { meses, resumos: resumoMensalRelatorio(dados, meses) };
+    }
+
+    function renderizar() {
+      const { meses, resumos } = contextoAtual();
+      if (!meses.length) return;
+
+      const recebido = resumos.reduce((s, item) => s + item.receitasRecebidas, 0);
+      const gasto = resumos.reduce((s, item) => s + item.totalComprometido, 0);
+      const pago = resumos.reduce((s, item) => s + item.pago, 0);
+      const resultado = recebido - pago;
+
+      document.getElementById("relRecebido").textContent = formatarMoeda(recebido);
+      document.getElementById("relGasto").textContent = formatarMoeda(gasto);
+      document.getElementById("relPago").textContent = formatarMoeda(pago);
+      const elResultado = document.getElementById("relResultado");
+      elResultado.textContent = formatarMoeda(resultado);
+      elResultado.className = `numero ${resultado >= 0 ? "valor-receita" : "valor-despesa"}`;
+
+      criarGraficoLinha(document.getElementById("graficoEvolucao"), resumos.map((item) => ({
+        label: rotuloMesCurto(item.mes), receita: item.receitasRecebidas, despesa: item.totalComprometido
+      })));
+
+      criarGraficoBarrasHorizontais(
+        document.getElementById("graficoCategoriasDespesas"),
+        categoriasDespesasPeriodo(dados, meses), { tipo: "despesa" }
+      );
+      criarGraficoBarrasHorizontais(
+        document.getElementById("graficoCategoriasReceitas"),
+        categoriasReceitasPeriodo(dados, meses), { tipo: "receita" }
+      );
+
+      const destaques = destaquesPeriodo(dados, meses);
+      const cards = [
+        ["Maior gasto", destaques.maiorGasto?.descricao || "—", destaques.maiorGasto?.valor],
+        ["Maior receita", destaques.maiorReceita?.descricao || "—", destaques.maiorReceita?.valor],
+        ["Categoria que mais gastou", destaques.categoriaMaiorGasto?.label || "—", destaques.categoriaMaiorGasto?.valor],
+        ["Categoria que mais recebeu", destaques.categoriaMaiorReceita?.label || "—", destaques.categoriaMaiorReceita?.valor]
+      ];
+      document.getElementById("relatorioDestaques").innerHTML = cards.map(([titulo, descricao, valor]) => `
+        <article><span>${titulo}</span><strong>${escaparHtml(descricao)}</strong><small class="numero">${valor != null ? formatarMoeda(valor) : "Sem dados"}</small></article>
+      `).join("");
+
+      document.getElementById("tabelaMensal").innerHTML = [...resumos].reverse().map((item) => `
+        <tr>
+          <td>${formatarMesAno(item.mes)}</td>
+          <td class="numero valor-receita">${formatarMoeda(item.receitasRecebidas)}</td>
+          <td class="numero">${formatarMoeda(item.despesas)}</td>
+          <td class="numero">${formatarMoeda(item.faturas)}</td>
+          <td class="numero valor-despesa">${formatarMoeda(item.totalComprometido)}</td>
+          <td class="numero">${formatarMoeda(item.pago)}</td>
+          <td class="numero ${item.saldoAtual >= 0 ? "valor-receita" : "valor-despesa"}">${formatarMoeda(item.saldoAtual)}</td>
+        </tr>`).join("");
+
+      const anos = agruparPorAno(resumos).reverse();
+      document.getElementById("tabelaAnual").innerHTML = anos.map((item) => `
+        <tr>
+          <td>${item.ano}</td>
+          <td class="numero valor-receita">${formatarMoeda(item.receitasRecebidas)}</td>
+          <td class="numero valor-despesa">${formatarMoeda(item.totalComprometido)}</td>
+          <td class="numero">${formatarMoeda(item.pago)}</td>
+          <td class="numero ${item.resultado >= 0 ? "valor-receita" : "valor-despesa"}">${formatarMoeda(item.resultado)}</td>
+        </tr>`).join("");
+    }
+
+    function definirPeriodo(quantidade) {
+      const fim = mesAtual();
+      mesFim.value = fim;
+      if (quantidade === "ano") mesInicio.value = `${fim.slice(0, 4)}-01`;
+      else mesInicio.value = somarMeses(fim, -(Number(quantidade) - 1));
+      document.querySelectorAll("[data-periodo]").forEach((botao) => botao.classList.toggle("ativo", botao.dataset.periodo === String(quantidade)));
+      renderizar();
+    }
+
+    document.querySelectorAll("[data-periodo]").forEach((botao) => botao.addEventListener("click", () => definirPeriodo(botao.dataset.periodo)));
+    [mesInicio, mesFim].forEach((campo) => campo.addEventListener("change", () => {
+      document.querySelectorAll("[data-periodo]").forEach((botao) => botao.classList.remove("ativo"));
+      if (mesInicio.value > mesFim.value) {
+        mostrarToast("O mês inicial precisa ser anterior ao mês final.", "erro");
+        return;
+      }
+      renderizar();
+    }));
+
+    function dadosExportacao() {
+      const { meses } = contextoAtual();
+      return lancamentosPeriodo(dados, meses);
+    }
+
+    function baixarBlob(blob, nome) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+    }
+
+    document.getElementById("exportarCsv").addEventListener("click", () => {
+      const linhas = dadosExportacao();
+      const cabecalho = ["Tipo", "Descrição", "Categoria", "Data", "Status", "Origem", "Valor"];
+      const escaparCsv = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+      const conteudo = [cabecalho, ...linhas.map((l) => [l.tipo, l.descricao, l.categoria, l.data, l.status, l.origem, l.valor.toFixed(2).replace(".", ",")])]
+        .map((linha) => linha.map(escaparCsv).join(";"))
+        .join("\r\n");
+      baixarBlob(new Blob(["\uFEFF", conteudo], { type: "text/csv;charset=utf-8" }), `relatorio-${mesInicio.value}-a-${mesFim.value}.csv`);
+    });
+
+    document.getElementById("exportarExcel").addEventListener("click", () => {
+      const linhas = dadosExportacao();
+      const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><table border="1"><thead><tr><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>Data</th><th>Status</th><th>Origem</th><th>Valor</th></tr></thead><tbody>${linhas.map((l) => `<tr><td>${escaparHtml(l.tipo)}</td><td>${escaparHtml(l.descricao)}</td><td>${escaparHtml(l.categoria)}</td><td>${escaparHtml(l.data)}</td><td>${escaparHtml(l.status)}</td><td>${escaparHtml(l.origem)}</td><td>${l.valor.toFixed(2)}</td></tr>`).join("")}</tbody></table></body></html>`;
+      baixarBlob(new Blob(["\uFEFF", html], { type: "application/vnd.ms-excel;charset=utf-8" }), `relatorio-${mesInicio.value}-a-${mesFim.value}.xls`);
+    });
+
+    document.getElementById("exportarPdf").addEventListener("click", () => window.print());
+
+    observarUsuario((usuario) => {
+      if (!usuario) return;
+      uidAtual = usuario.uid;
+      const areas = Object.keys(dados);
+      areas.forEach((area) => observarLista(uidAtual, area, (objeto) => {
+        dados[area] = paraLista(objeto);
+        renderizar();
+      }));
+    });
+  </script>
+  <script type="module" src="../js/app.js"></script>
+</body>
+</html>

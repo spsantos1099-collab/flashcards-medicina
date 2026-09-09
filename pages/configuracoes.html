@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurações · Controle Financeiro</title>
+  <script src="../js/theme-init.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body data-protegida="true" data-raiz="../">
+  <main class="container pagina-app pagina-configuracoes">
+    <div class="topo-app">
+      <div>
+        <h1 class="topo-app__titulo">Configurações</h1>
+        <p class="topo-app__subtitulo">Perfil, aparência e informações da sua conta.</p>
+      </div>
+      <div class="topo-app__usuario">
+        <span><strong data-usuario-resumo></strong></span>
+        <button data-sair class="botao-sair" type="button">Sair</button>
+      </div>
+    </div>
+
+    <nav class="nav-paginas" aria-label="Navegação principal">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="receitas.html">Receitas</a>
+      <a href="despesas.html">Despesas</a>
+      <a href="cartoes.html">Cartões</a>
+      <a href="calendario.html">Calendário</a>
+      <a href="metas.html">Metas</a>
+      <a href="relatorios.html">Relatórios</a>
+      <a href="configuracoes.html" class="ativa">Configurações</a>
+    </nav>
+
+    <section class="perfil-cabecalho card">
+      <div class="perfil-avatar" id="perfilAvatar"><span data-usuario-iniciais>CF</span></div>
+      <div class="perfil-cabecalho__texto">
+        <span class="perfil-cabecalho__rotulo">Seu perfil</span>
+        <h2 id="perfilNomeVisual">Minha conta</h2>
+        <p data-usuario-email></p>
+      </div>
+    </section>
+
+    <div class="configuracoes-grade configuracoes-grade--nova">
+      <section class="card configuracao-card configuracao-card--perfil">
+        <div class="configuracao-card__cabecalho">
+          <div>
+            <h2>Informações pessoais</h2>
+            <p>Esses dados servem para personalizar o sistema. Seu e-mail de login não é alterado aqui.</p>
+          </div>
+        </div>
+
+        <form id="formularioPerfil" class="perfil-formulario">
+          <div class="grade-formulario">
+            <div class="campo-formulario">
+              <label for="perfilNome">Nome</label>
+              <input type="text" id="perfilNome" maxlength="60" autocomplete="given-name" placeholder="Seu nome">
+            </div>
+            <div class="campo-formulario">
+              <label for="perfilSobrenome">Sobrenome</label>
+              <input type="text" id="perfilSobrenome" maxlength="80" autocomplete="family-name" placeholder="Seu sobrenome">
+            </div>
+            <div class="campo-formulario campo-formulario--largura-total">
+              <label for="perfilNomeExibicao">Como quer aparecer no sistema <span class="campo-opcional">opcional</span></label>
+              <input type="text" id="perfilNomeExibicao" maxlength="80" placeholder="Ex: Suzanne">
+              <small class="campo-ajuda">Se ficar vazio, usaremos seu nome e sobrenome.</small>
+            </div>
+            <div class="campo-formulario campo-formulario--largura-total">
+              <label>E-mail</label>
+              <div class="campo-somente-leitura" data-usuario-email></div>
+            </div>
+          </div>
+          <div class="configuracao-acoes">
+            <span id="perfilStatus" class="configuracao-status"></span>
+            <button class="botao-primario" style="width:auto" type="submit">Salvar perfil</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card configuracao-card">
+        <div class="configuracao-card__cabecalho">
+          <div>
+            <h2>Aparência</h2>
+            <p>Escolha o tema. A preferência fica salva neste dispositivo e no seu perfil.</p>
+          </div>
+        </div>
+
+        <div class="tema-opcoes" role="radiogroup" aria-label="Tema do sistema">
+          <button class="tema-opcao" type="button" data-tema-opcao="claro" role="radio" aria-checked="false">
+            <span class="tema-opcao__preview tema-opcao__preview--claro" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span><strong>Claro</strong><small>Sempre usar o modo claro</small></span>
+          </button>
+          <button class="tema-opcao" type="button" data-tema-opcao="escuro" role="radio" aria-checked="false">
+            <span class="tema-opcao__preview tema-opcao__preview--escuro" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span><strong>Escuro</strong><small>Sempre usar o modo escuro</small></span>
+          </button>
+          <button class="tema-opcao" type="button" data-tema-opcao="sistema" role="radio" aria-checked="false">
+            <span class="tema-opcao__preview tema-opcao__preview--sistema" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span><strong>Seguir sistema</strong><small>Acompanha o computador ou celular</small></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="card configuracao-card configuracao-card--conta">
+        <div class="configuracao-card__cabecalho">
+          <div>
+            <h2>Conta e segurança</h2>
+            <p>Informações do acesso usado para entrar no sistema.</p>
+          </div>
+        </div>
+        <div class="conta-info-lista">
+          <div><span>E-mail de acesso</span><strong data-usuario-email></strong></div>
+          <div><span>Método de login</span><strong id="metodoLogin">—</strong></div>
+          <div><span>Conta criada em</span><strong id="dataCriacaoConta">—</strong></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { observarUsuario, atualizarRegistro, buscarUmaVez } from "../js/firebase.js";
+    import { mostrarToast } from "../js/app.js";
+
+    let uidAtual = null;
+    let usuarioAtual = null;
+    let perfilAtual = {};
+    const opcoes = [...document.querySelectorAll("[data-tema-opcao]")];
+    const formularioPerfil = document.getElementById("formularioPerfil");
+
+    function marcarOpcao(preferencia) {
+      opcoes.forEach((botao) => {
+        const ativa = botao.dataset.temaOpcao === preferencia;
+        botao.classList.toggle("tema-opcao--ativa", ativa);
+        botao.setAttribute("aria-checked", String(ativa));
+      });
+    }
+
+    function nomeVisual() {
+      const exibicao = document.getElementById("perfilNomeExibicao").value.trim();
+      const completo = [document.getElementById("perfilNome").value.trim(), document.getElementById("perfilSobrenome").value.trim()].filter(Boolean).join(" ");
+      return exibicao || completo || usuarioAtual?.displayName || usuarioAtual?.email || "Minha conta";
+    }
+
+    function iniciais(nome) {
+      const partes = String(nome || "CF").trim().split(/\s+/).filter(Boolean);
+      return (partes.length > 1 ? `${partes[0][0]}${partes[partes.length - 1][0]}` : partes[0]?.slice(0, 2) || "CF").toUpperCase();
+    }
+
+    function atualizarPreviewPerfil() {
+      const nome = nomeVisual();
+      document.getElementById("perfilNomeVisual").textContent = nome;
+      document.querySelectorAll("[data-usuario-resumo]").forEach((el) => el.textContent = nome);
+      const avatar = document.getElementById("perfilAvatar");
+      const foto = usuarioAtual?.photoURL;
+      if (foto) {
+        avatar.innerHTML = `<img src="${foto}" alt="Foto do perfil">`;
+      } else {
+        avatar.innerHTML = `<span>${iniciais(nome)}</span>`;
+      }
+    }
+
+    const preferenciaInicial = window.ControleTema?.obterPreferencia?.() || "sistema";
+    marcarOpcao(preferenciaInicial);
+
+    opcoes.forEach((botao) => {
+      botao.addEventListener("click", async () => {
+        const preferencia = botao.dataset.temaOpcao;
+        window.ControleTema?.aplicarPreferencia?.(preferencia, true);
+        marcarOpcao(preferencia);
+        if (!uidAtual) return;
+        try {
+          await atualizarRegistro(uidAtual, "configuracoes", "preferencias", { tema: preferencia, updatedAt: Date.now() });
+          mostrarToast("Tema atualizado.", "sucesso");
+        } catch (_) {
+          mostrarToast("O tema foi aplicado, mas não foi possível salvar no perfil.", "erro");
+        }
+      });
+    });
+
+    ["perfilNome", "perfilSobrenome", "perfilNomeExibicao"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", atualizarPreviewPerfil);
+    });
+
+    formularioPerfil.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      if (!uidAtual) return;
+      const dados = {
+        nome: document.getElementById("perfilNome").value.trim(),
+        sobrenome: document.getElementById("perfilSobrenome").value.trim(),
+        nomeExibicao: document.getElementById("perfilNomeExibicao").value.trim(),
+        updatedAt: Date.now()
+      };
+      try {
+        await atualizarRegistro(uidAtual, "perfil", "principal", {
+          ...dados,
+          createdAt: perfilAtual.createdAt || Date.now()
+        });
+        perfilAtual = { ...perfilAtual, ...dados };
+        atualizarPreviewPerfil();
+        mostrarToast("Perfil atualizado.", "sucesso");
+      } catch (_) {
+        mostrarToast("Não foi possível salvar o perfil.", "erro");
+      }
+    });
+
+    observarUsuario(async (usuario) => {
+      if (!usuario) return;
+      uidAtual = usuario.uid;
+      usuarioAtual = usuario;
+      document.querySelectorAll("[data-usuario-email]").forEach((el) => el.textContent = usuario.email || "");
+      document.getElementById("metodoLogin").textContent = usuario.providerData?.some((p) => p.providerId === "google.com") ? "Google" : "E-mail e senha";
+      const criada = usuario.metadata?.creationTime ? new Date(usuario.metadata.creationTime) : null;
+      document.getElementById("dataCriacaoConta").textContent = criada ? new Intl.DateTimeFormat("pt-BR").format(criada) : "—";
+
+      try {
+        perfilAtual = await buscarUmaVez(uidAtual, "perfil/principal");
+      } catch (_) {
+        perfilAtual = {};
+      }
+      document.getElementById("perfilNome").value = perfilAtual.nome || "";
+      document.getElementById("perfilSobrenome").value = perfilAtual.sobrenome || "";
+      document.getElementById("perfilNomeExibicao").value = perfilAtual.nomeExibicao || "";
+      atualizarPreviewPerfil();
+    });
+  </script>
+  <script type="module" src="../js/app.js"></script>
+</body>
+</html>

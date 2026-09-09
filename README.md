@@ -1,133 +1,145 @@
-# Fichário — estado atual do projeto
+# Controle Financeiro
 
-Cópia limpa do Fichário atualizada em 17/08/2026.
+Sistema pessoal de controle financeiro feito com **HTML, CSS e JavaScript puro**, usando **Firebase Authentication + Realtime Database** e publicação pela **Netlify** a partir do GitHub.
 
-## O que já está funcionando
+## Estado atual
 
-- React + Vite + TypeScript + Tailwind + React Router.
-- Firebase Authentication por e-mail/senha.
-- Firebase Realtime Database separado por UID.
-- Criação, edição e exclusão de decks reais.
-- Upload local de PDF e DOCX.
-- Extração de texto de PDF página a página e de DOCX.
-- Geração por IA: Básico, Cloze e Caso clínico.
-- Dificuldade Fácil / Médio / Difícil.
-- Geração em lotes, retentativas, deduplicação e revisão de casos clínicos.
-- Fonte rastreável com documento/página/evidência quando disponível.
-- Revisão antes de salvar: aprovar, rejeitar, editar, excluir, regenerar e criar manualmente.
-- Cards persistidos nos decks.
-- **Edição de cards já salvos diretamente no deck.**
-- **Gerenciamento com seleção múltipla e exclusão de cards salvos.**
-- Ao excluir cards salvos, reviews associados também são removidos.
-- Modo de estudo com Errei / Difícil / Bom / Fácil.
-- Repetição espaçada com FSRS.
-- Fila diária, vencidos, novos e cards difíceis.
-- Favoritos, busca global e filtros de estudo.
-- Dashboard e estatísticas de desempenho.
+Concluídas até aqui:
 
-## Modo Prova
+1. Estrutura do projeto
+2. Firebase Realtime Database
+3. Login com Google e e-mail/senha
+4. Dashboard
+5. Receitas
+6. Despesas
+7. Cartões, faturas, parcelamento e assinaturas
+8. Calendário financeiro
+9. Metas financeiras
+10. Relatórios
 
-O antigo acesso de **Pesquisar por tema** foi substituído na interface pelo **Modo Prova**.
+Além dessas etapas, esta versão contém uma revisão de usabilidade do Dashboard, Cartões, pagamentos, tema e perfil.
 
-Fluxo atual:
-
-1. Selecionar deck de destino.
-2. Enviar um PDF de prova com gabarito.
-3. O Fichário identifica questões de múltipla escolha, alternativa marcada como `(CORRETA)`, dificuldade, resposta comentada, tema/subárea e prova de origem.
-4. Questões repetidas são unificadas pelo código da questão.
-5. Questões que dependem de figura, imagem, gráfico, traçado ou nomograma são descartadas automaticamente.
-6. A usuária escolhe quais questões válidas quer transformar em flashcards. A resposta correta fica oculta nessa análise.
-7. A usuária escolhe o formato: **Fiel à questão** (mantém enunciado/gabarito/comentário) ou **Memorização rápida** (Gemini apenas encurta o conteúdo para um card básico e atômico).
-8. O gabarito do próprio PDF é soberano: mesmo no modo de memorização, a IA não decide nem troca qual alternativa é correta.
-9. Os cards passam pela mesma tela de revisão antes de serem salvos.
-
-## Pesquisar por tema — fora da interface
-
-O código antigo de pesquisa médica foi preservado para possível retomada futura, mas a rota `/create/research` redireciona para `/create/exam` e não existe mais acesso pela interface.
-
-Não retomar crawler, Google Search, MeSH, PubMed/OpenAlex ou ranking de fontes até decisão explícita de reabrir essa funcionalidade.
-
-## Estrutura principal
+## Estrutura
 
 ```text
-src/                      interface e lógica do aplicativo
-netlify/functions/        funções server-side da IA e pesquisa preservada
-firebase/                 regras do Realtime Database
-public/                   arquivos públicos
-package.json              dependências e comandos
-package-lock.json         versões travadas das dependências
-netlify.toml              configuração local/Netlify
-vite.config.ts            configuração do Vite
-.env.example              modelo de variáveis de ambiente, sem chaves reais
+controle-financeiro/
+├── index.html
+├── database.rules.json
+├── css/
+│   └── style.css
+├── js/
+│   ├── app.js
+│   ├── calculos.js
+│   ├── config.js
+│   ├── firebase.js
+│   ├── theme-init.js
+│   └── utils.js
+├── components/
+│   ├── calendario.js
+│   ├── metas.js
+│   ├── relatorios.js
+│   ├── cards.js
+│   ├── cartoes.js
+│   ├── charts.js
+│   └── modal.js
+└── pages/
+    ├── dashboard.html
+    ├── receitas.html
+    ├── despesas.html
+    ├── cartoes.html
+    ├── calendario.html
+    ├── metas.html
+    ├── relatorios.html
+    └── configuracoes.html
 ```
 
-## Variável da Gemini
+## Banco de dados
+
+Todos os dados ficam em:
 
 ```text
-FICHARIO_GEMINI_API_KEY
+usuarios/{uid}/...
 ```
 
-Ela é usada somente pelas Netlify Functions. Nunca criar `VITE_FICHARIO_GEMINI_API_KEY`.
+As regras de `database.rules.json` permitem que cada usuário autenticado leia e altere somente a própria árvore.
 
-## Arquivos não versionados no GitHub
+Coleções/áreas utilizadas atualmente:
 
-O `.gitignore` mantém fora do repositório:
+- `receitas`
+- `despesas`
+- `cartoes`
+- `compras`
+- `parcelas`
+- `faturasManuais`
+- `acertosPessoas`
+- `pagamentosFaturas`
+- `configuracoes/preferencias`
+- `perfil/principal`
+- `metas`
 
-- `.env` e variantes locais — podem conter credenciais;
-- `.netlify/` — estado/cache local da Netlify;
-- `node_modules/` — recriado com `npm install`;
-- `dist/` — recriado com `npm run build`;
-- `*.tsbuildinfo` e arquivos gerados do `vite.config.ts`.
+## Regra financeira do Dashboard
 
-O arquivo `.env.example` fica no repositório apenas como modelo, sem valores reais.
+O Dashboard usa `js/calculos.js` como fonte única de cálculo para evitar duplicidade.
 
-## Como abrir no Windows
+- **Recebido este mês:** receitas do mês com status `recebido`.
+- **Pago este mês:** despesas comuns pagas + faturas próprias pagas + pagamentos/acertos com terceiros.
+- **Saldo atual:** recebido no mês − pago no mês.
+- **Despesas:** lançamentos da tela Despesas no mês.
+- **Faturas:** total oficial das faturas do mês. Se houver um total manual, ele substitui a soma das compras detalhadas daquele cartão/mês.
+- **Total do mês:** despesas + faturas.
+- **Acertos com pessoas não são uma nova despesa:** eles registram o pagamento das obrigações já contabilizadas, evitando somar o mesmo valor duas vezes.
 
-1. Extraia o ZIP.
-2. Crie um `.env` local a partir de `.env.example` e preencha apenas no seu computador.
-3. Abra um terminal na pasta.
-4. Rode uma única vez:
+Regularizar um pagamento de um mês antigo altera aquele mês, mas não muda o “Saldo atual” do mês corrente.
 
-```powershell
-npm install
-```
+## Cartões de terceiros e acertos
 
-5. Confira:
+Cartões de outras pessoas são mostrados **mês a mês**, sem somar parcelas futuras ou assinaturas como se fossem uma dívida atual inteira.
 
-```powershell
-npm run build
-```
+É possível:
 
-6. Se terminar com `✓ built in ...`, rode:
+- informar somente o total da fatura;
+- lançar compras detalhadas quando for útil;
+- registrar pagamento parcial;
+- marcar a fatura inteira como paga;
+- vincular despesas comuns a uma pessoa (ex.: `Energia → Mãe`);
+- visualizar o acerto mensal consolidado da pessoa;
+- registrar pagamentos parciais ou marcar todo o acerto do mês como pago.
 
-```powershell
-netlify dev
-```
+O sistema preserva pagamentos antigos que já estavam marcados antes da criação do histórico de pagamentos, sem contá-los duas vezes.
 
-7. Abra `http://localhost:8888`.
+## Faturas compactas
 
-## Deploy na Netlify
+As faturas ficam recolhidas por padrão. O cabeçalho mostra o essencial; os lançamentos aparecem ao clicar em **Ver detalhes**. Para faturas muito grandes, são mostrados poucos registros por vez com **Mostrar mais**, evitando uma página interminável.
 
-O repositório está preparado para deploy pela Netlify usando `netlify.toml`:
+## Assinaturas
 
-- comando de build: `npm run build`;
-- pasta publicada: `dist`;
-- Functions: `netlify/functions`;
-- fallback SPA para o React Router.
+Compras recorrentes mantêm um horizonte de cobranças futuras e usam um identificador único por assinatura/mês para evitar duplicidades. Também é possível remover somente uma cobrança mensal sem apagar toda a assinatura.
 
-As variáveis reais devem ser cadastradas no painel da Netlify e nunca commitadas no GitHub.
+## Tema e aparência
+
+A interface usa a tipografia **Geist**, com números tabulares para valores financeiros.
+
+Em **Configurações → Aparência**, o usuário escolhe:
+
+- Claro
+- Escuro
+- Seguir sistema
+
+A preferência é salva localmente e em `configuracoes/preferencias`. O arquivo `js/theme-init.js` aplica o tema antes do CSS ser desenhado para evitar a piscada branca ao trocar de página.
+
+## Publicação
+
+O projeto não tem etapa de build. No GitHub, `index.html`, `css/`, `js/`, `components/` e `pages/` devem permanecer na raiz do repositório. Na Netlify, o diretório de publicação é a raiz (`.` ou vazio, conforme a interface).
 
 
-### Memorização rápida
-- Assunto clínico inferido do enunciado, gabarito e comentário.
-- Um único alvo de memória por card sempre que possível.
+## Metas
 
-## Refinamento de interface e Perfil
+A área de Metas permite criar objetivos, informar valor inicial, prazo opcional, registrar aportes ou retiradas e acompanhar percentual, valor restante e previsão de conclusão baseada no histórico de aportes.
 
-- Perfil permite alterar nome e curso.
-- Curso pode ser escolhido entre opções comuns da área da saúde ou informado manualmente.
-- Senha pode ser alterada dentro do Perfil após confirmação da senha atual.
-- Email permanece somente para leitura nesta etapa.
-- Textos técnicos de infraestrutura foram retirados das telas principais.
-- A tela inicial não usa mais emoji na saudação.
-- Termos internos como Firebase, FSRS e nome do modelo Gemini não são mais exibidos no fluxo principal de criação e revisão.
+## Relatórios
+
+A área de Relatórios permite selecionar um período, comparar meses e anos, analisar categorias, maiores receitas/gastos e exportar os lançamentos em CSV, Excel (.xls) ou usar a impressão do navegador para salvar em PDF.
+
+## Perfil
+
+Em Configurações, o usuário pode informar nome, sobrenome e nome de exibição. O sistema usa essa identidade no cabeçalho das páginas. Quando a conta Google possui foto de perfil, ela é usada na área de configurações; caso contrário, são exibidas iniciais.
